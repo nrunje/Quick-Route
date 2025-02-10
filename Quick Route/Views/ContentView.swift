@@ -6,18 +6,25 @@
 //
 
 import SwiftUI
+import MapKit
+import CoreLocation
 
 struct ContentView: View {
     var body: some View {
         VStack {
+            MapView()
+            
             Image(systemName: "globe")
                 .imageScale(.large)
                 .foregroundStyle(.tint)
             Text("Hello, world!")
+            
         }
         .padding()
     }
 }
+
+
 
 #Preview {
     ContentView()
