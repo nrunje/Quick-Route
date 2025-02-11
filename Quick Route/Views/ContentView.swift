@@ -10,17 +10,16 @@ import MapKit
 import CoreLocation
 
 struct ContentView: View {
+    @ObservedObject var locationManager = LocationManager.shared
+    
     var body: some View {
-        VStack {
-            MapView()
-            
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-            
+        Group {
+            if locationManager.userLocation == nil {
+                LocationRequestView()
+            } else {
+                Text("\(locationManager.userLocation!)")
+            }
         }
-        .padding()
     }
 }
 
