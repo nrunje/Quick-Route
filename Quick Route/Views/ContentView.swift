@@ -17,7 +17,22 @@ struct ContentView: View {
             if locationManager.userLocation == nil {
                 LocationRequestView()
             } else {
-                Text("\(locationManager.userLocation!)")
+                TabView {
+                    MapView()
+                        .tabItem {
+                            Label("Map", systemImage: "map")
+                        }
+                    
+                    DestinationsView()
+                        .tabItem {
+                            Label("Destinations", systemImage: "list.bullet")
+                        }
+                    
+                    SettingsView()
+                        .tabItem {
+                            Label("Settings", systemImage: "gear")
+                        }
+                }
             }
         }
     }
