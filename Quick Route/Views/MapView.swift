@@ -11,8 +11,7 @@ import MapKit
 struct MapView: View {
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var region = MKCoordinateRegion()
-    @State private var sheetOffset: CGFloat = 0
-    @State private var sheetHeight: CGFloat = 300 // Adjust this value as needed
+    @State private var isSheetPresented = true
     
     var body: some View {
         ZStack {
@@ -30,7 +29,6 @@ struct MapView: View {
                     }
             }
             // END Map
-
             
             
         }
