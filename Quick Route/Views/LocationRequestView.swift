@@ -35,7 +35,7 @@ struct LocationRequestView: View {
                 
                 VStack {
                     Button {
-                        print("Request location from user")
+//                        print("Request location from user")
                         LocationManager.shared.requestLocation()
                     } label: {
                         Text("Allow location")
@@ -50,7 +50,7 @@ struct LocationRequestView: View {
                     .padding()
                     
                     Button {
-                        print("Dismiss")
+//                        print("Dismiss")
                     } label: {
                         Text("Maybe later")
                     }
