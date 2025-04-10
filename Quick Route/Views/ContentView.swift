@@ -28,6 +28,11 @@ struct ContentView: View {
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
+            
+            TestView()
+                .tabItem {
+                    Label("Test", systemImage: "square.and.arrow.up")
+                }
         }
     }
 }
