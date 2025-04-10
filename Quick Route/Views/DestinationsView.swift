@@ -57,14 +57,14 @@ struct DestinationsView: View {
         }
         .ignoresSafeArea(edges: .top)
         .sheet(isPresented: $showSheet) {
-            SheetContentView()
+            DestinationSheet()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
     }
 }
 
-struct SheetContentView: View {
+struct DestinationSheet: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("Destination Options")
