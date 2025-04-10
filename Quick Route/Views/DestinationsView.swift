@@ -1,3 +1,10 @@
+//
+//  DestinationsView.swift
+//  Quick Route
+//
+//  Created by Nicholas Runje on 2/4/25.
+//
+
 import SwiftUI
 
 // Main view displaying the list of destination buttons
@@ -13,14 +20,26 @@ struct DestinationsView: View {
         // Use ScrollView in case the list gets long
         ScrollView {
             VStack(alignment: .leading, spacing: 0) { // Use spacing 0 if needed
-                // --- COVER IMAGE ---
-                Image("destinationscover")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill) // Fill the frame
-                    .frame(height: 200) // Fixed height
-                    .clipped() // Clip overflow
-                    .overlay(Color.black.opacity(0.4)) // Darken the image
-                // --- END: COVER IMAGE ---
+                // --- COVER AND HEADER ---
+                ZStack {
+                    Image("destinationscover")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill) // Fill the frame
+                        .frame(height: 200) // Fixed height
+                        .clipped() // Clip overflow
+                        .overlay(Color.black.opacity(0.4)) // Darken the image
+
+                    VStack {
+                        Spacer()
+                        Spacer()
+                        Text("Quick Route")
+                            .foregroundColor(.white) // Make the text white
+                            .font(.largeTitle) // Make the text large (you can adjust this)
+                            .fontWeight(.bold)
+                        Spacer()
+                    } // Optional: make it bold for emphasis
+                } // Darken the image
+                // --- END: COVER AND HEADER --
 
                 // --- PAGE TITLE ---
                 Text("Enter destinations:")
@@ -51,7 +70,11 @@ struct DestinationsView: View {
                         }
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color.blue) // Button background color
+                        // --- Conditional Background Color ---
+                        // If the destination string is empty (placeholder), use blue.
+                        // Otherwise (user entered text), use green.
+                        .background(destinations[index].isEmpty ? Color.blue : Color.green)
+                        // --- End Conditional Background Color ---
                         .cornerRadius(10) // Rounded corners
                     }
                     .padding(.horizontal) // Horizontal padding for the button
@@ -83,7 +106,7 @@ struct DestinationsView: View {
                 }
                 // --- End of callback logic ---
             }
-            .presentationDetents([.medium, .large]) // Allow medium and large sheet sizes
+            .presentationDetents([.large]) // Allow medium and large sheet sizes
             .presentationDragIndicator(.visible) // Show the drag indicator
         }
     }
@@ -108,7 +131,6 @@ struct DestinationSheet: View {
     var body: some View {
         NavigationView { // Wrap in NavigationView for title and potential toolbar items
             VStack(alignment: .leading, spacing: 20) {
-
                 // TextField for entering the destination name
                 TextField("Enter destination name or address", text: $inputText)
                     .textFieldStyle(.roundedBorder)
@@ -130,10 +152,10 @@ struct DestinationSheet: View {
                 }
                 // Add a "Cancel" button
                 ToolbarItem(placement: .navigationBarLeading) {
-                     Button("Cancel") {
-                         dismiss() // Dismiss the sheet without saving
-                     }
-                 }
+                    Button("Cancel") {
+                        dismiss() // Dismiss the sheet without saving
+                    }
+                }
             }
         }
     }
