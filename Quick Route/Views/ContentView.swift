@@ -29,7 +29,7 @@ struct ContentView: View {
                     Label("Settings", systemImage: "gear")
                 }
             
-            TestView()
+            Test2View()
                 .tabItem {
                     Label("Test", systemImage: "square.and.arrow.up")
                 }
