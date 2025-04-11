@@ -7,110 +7,243 @@
 
 import SwiftUI
 
+// Define what kind of destination item we are editing
+// Needed for the .sheet(item:) modifier to work with different types
+enum EditableItem: Identifiable, Hashable {
+    case origin
+    case finalStop
+    case intermediate(index: Int)
+
+    // Provide a stable ID for the .sheet(item:) modifier
+    var id: String {
+        switch self {
+        case .origin: return "origin"
+        case .finalStop: return "finalStop"
+        case .intermediate(let index): return "intermediate_\(index)"
+        }
+    }
+}
+
 // Main view displaying the list of destination buttons
 struct DestinationsView: View {
-    // State variable to hold the list of destination strings.
-    // An empty string "" represents an empty slot. Starts with one slot.
-    @State private var destinations: [String] = [""]
-    // State variable to track which destination index is being edited via the sheet.
-    // `nil` means no sheet is presented.
-    @State private var editingIndex: Int? = nil
+    // State for the fixed points
+    @State private var origin: String = ""
+    @State private var finalStop: String = ""
+
+    // State variable to hold the list of INTERMEDIATE destination strings.
+    @State private var intermediateDestinations: [String] = [] // Start empty now
+
+    // State variable to track which item is being edited via the sheet.
+    @State private var editingItem: EditableItem? = nil // Use the new enum
+
+    // Helper function to get sheet parameters based on the item
+    // This resolves the 'buildExpression' error by simplifying the .sheet closure
+    static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
+        switch item {
+        case .origin:
+            return (text: origin, title: "Set Origin Point")
+        case .finalStop:
+            return (text: finalStop, title: "Set Final Destination")
+        case .intermediate(let index):
+            // Safely check index
+            if intermediateDestinations.indices.contains(index) {
+                return (text: intermediateDestinations[index], title: "Edit Stop \(index + 1)")
+            } else {
+                // Handle invalid index case gracefully
+                print("Warning: Invalid index \(index) passed to sheet. Using defaults.")
+                return (text: "", title: "Edit Stop")
+            }
+        }
+    }
+
 
     var body: some View {
         // Use ScrollView in case the list gets long
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) { // Use spacing 0 if needed
+            VStack(alignment: .leading, spacing: 15) { // Added some default spacing
                 // --- COVER AND HEADER ---
                 ZStack {
+                    // Replace "destinationscover" with your actual image name if different
                     Image("destinationscover")
                         .resizable()
-                        .aspectRatio(contentMode: .fill) // Fill the frame
-                        .frame(height: 200) // Fixed height
-                        .clipped() // Clip overflow
-                        .overlay(Color.black.opacity(0.4)) // Darken the image
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 200)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.4))
 
                     VStack {
                         Spacer()
                         Spacer()
                         Text("Quick Route")
-                            .foregroundColor(.white) // Make the text white
-                            .font(.largeTitle) // Make the text large (you can adjust this)
+                            .foregroundColor(.white)
+                            .font(.largeTitle)
                             .fontWeight(.bold)
                         Spacer()
-                    } // Optional: make it bold for emphasis
-                } // Darken the image
-                // --- END: COVER AND HEADER --
+                    }
+                }
+                 .padding(.bottom, 10) // Space below header
 
                 // --- PAGE TITLE ---
-                Text("Enter destinations:")
+                Text("Set Route Points:") // Changed title slightly
                     .font(.headline)
                     .padding([.top, .leading, .trailing]) // Add padding around title
-                    .padding(.bottom, 10) // Space below title
+                    .padding(.bottom, 5) // Space below title
                 // --- END: PAGE TITLE ---
 
-                // --- DYNAMIC DESTINATION BUTTONS ---
-                // Iterate through the indices of the destinations array
-                ForEach(destinations.indices, id: \.self) { index in
-                    Button(action: {
-                        // Set the index to be edited, which triggers the sheet
-                        print("Button \(index + 1) tapped")
-                        editingIndex = index
-                    }) {
-                        HStack {
-                            // Display the entered destination or the placeholder text
-                            Text(destinations[index].isEmpty ? "Destination \(index + 1)" : destinations[index])
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .lineLimit(1) // Prevent text from wrapping
 
-                            Spacer()
+                // --- ORIGIN BUTTON ---
+                DestinationButtonView(
+                    text: origin,
+                    placeholder: "Set Origin Point",
+                    isEmpty: origin.isEmpty,
+                    color: .orange // Example color for origin
+                ) {
+                    print("Origin Button tapped")
+                    editingItem = .origin // Set editing item to origin
+                }
+                .padding(.horizontal) // Horizontal padding for the button
+                .padding(.bottom, 10) // Space below button
 
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.white)
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        // --- Conditional Background Color ---
-                        // If the destination string is empty (placeholder), use blue.
-                        // Otherwise (user entered text), use green.
-                        .background(destinations[index].isEmpty ? Color.blue : Color.green)
-                        // --- End Conditional Background Color ---
-                        .cornerRadius(10) // Rounded corners
+
+                // --- INTERMEDIATE DESTINATIONS ---
+                // Only show this section header if there are intermediate stops
+                if !intermediateDestinations.isEmpty {
+                     Text("Add Stops:")
+                         .font(.headline)
+                         .padding(.horizontal)
+                         .padding(.bottom, 5)
+                 }
+
+                // Iterate through the indices of the intermediate destinations array
+                ForEach(intermediateDestinations.indices, id: \.self) { index in
+                    DestinationButtonView(
+                        text: intermediateDestinations[index],
+                        placeholder: "Stop \(index + 1)",
+                        isEmpty: intermediateDestinations[index].isEmpty,
+                        color: intermediateDestinations[index].isEmpty ? .blue : .green // Original colors
+                    ) {
+                         print("Intermediate Button \(index + 1) tapped")
+                         editingItem = .intermediate(index: index) // Set editing item to intermediate
                     }
                     .padding(.horizontal) // Horizontal padding for the button
                     .padding(.bottom, 10) // Space below each button
                 }
                 // --- END: DYNAMIC DESTINATION BUTTONS ---
 
+                // --- ADD INTERMEDIATE STOP BUTTON ---
+                 Button {
+                     intermediateDestinations.append("") // Just add an empty slot
+                     // Optional: Automatically open sheet for the new stop
+                     // editingItem = .intermediate(index: intermediateDestinations.count - 1)
+                     print("Added new intermediate stop slot. Count: \(intermediateDestinations.count)")
+                 } label: {
+                     HStack {
+                         Image(systemName: "plus.circle.fill")
+                         Text("Add Intermediate Stop")
+                     }
+                     .padding()
+                     .frame(maxWidth: .infinity)
+                     .background(Color.secondary.opacity(0.2))
+                     .foregroundColor(.blue)
+                     .cornerRadius(10)
+                 }
+                 .padding(.horizontal)
+                 .padding(.bottom, 10)
+
+
+                // --- FINAL STOP BUTTON ---
+                 DestinationButtonView(
+                     text: finalStop,
+                     placeholder: "Set Final Destination",
+                     isEmpty: finalStop.isEmpty,
+                     color: .purple // Example color for final stop
+                 ) {
+                     print("Final Stop Button tapped")
+                     editingItem = .finalStop // Set editing item to final stop
+                 }
+                 .padding(.horizontal) // Horizontal padding for the button
+                 .padding(.bottom, 10) // Space below button
+
+
                 Spacer() // Push content to top if VStack is not filling screen
             }
         }
         .ignoresSafeArea(edges: .top) // Allow content (image) to go under status bar
         // --- SHEET PRESENTATION ---
-        // Use .sheet(item:) which binds to an Optional Identifiable state.
-        // When editingIndex is set to a non-nil Int, the sheet appears.
-        .sheet(item: $editingIndex) { index in
-            // Pass the initial text and the callback function to the sheet
-            DestinationSheet(initialText: destinations[index]) { enteredText in
-                // --- This code runs when the sheet calls the onSave callback ---
+        // Use .sheet(item:) bound to our Optional EditableItem state.
+        .sheet(item: $editingItem) { item in // 'item' is the non-optional EditableItem
+            // --- Use the helper function ---
+            let params = Self.sheetParameters(
+                for: item, // Pass the unwrapped item
+                origin: origin,
+                finalStop: finalStop,
+                intermediateDestinations: intermediateDestinations
+            )
+
+            // --- Now, simply create the View ---
+            DestinationSheet(
+                initialText: params.text, // Use calculated text
+                sheetTitle: params.title  // Use calculated title
+            ) { enteredText in
+                // --- This onSave callback runs when DestinationSheet calls it ---
                 let trimmedText = enteredText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                // Update the destination text in our array
-                destinations[index] = trimmedText
-
-                // Check if the user just filled the *last* available slot
-                if index == destinations.count - 1 && !trimmedText.isEmpty {
-                    // If yes, add a new empty slot to the end of the array
-                    destinations.append("")
-                    print("Added new destination slot. Count: \(destinations.count)")
+                // Update the correct state variable based on which item was edited
+                // Use the 'item' captured by the .sheet closure
+                switch item {
+                case .origin:
+                    origin = trimmedText
+                    print("Origin updated to: \(trimmedText)")
+                case .finalStop:
+                    finalStop = trimmedText
+                     print("Final Stop updated to: \(trimmedText)")
+                case .intermediate(let index):
+                    // Safely update intermediate destination
+                    if intermediateDestinations.indices.contains(index) {
+                        intermediateDestinations[index] = trimmedText
+                        print("Intermediate stop \(index + 1) updated to: \(trimmedText)")
+                    }
                 }
                 // --- End of callback logic ---
             }
             .presentationDetents([.large]) // Allow medium and large sheet sizes
             .presentationDragIndicator(.visible) // Show the drag indicator
+        } // --- End of .sheet modifier ---
+    } // End of body
+} // End of DestinationsView
+
+
+// Helper View for the Button Style (extracted for clarity)
+struct DestinationButtonView: View {
+    let text: String
+    let placeholder: String
+    let isEmpty: Bool
+    let color: Color // Pass the base color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                // Display the entered destination or the placeholder text
+                Text(text.isEmpty ? placeholder : text)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .lineLimit(1) // Prevent text from wrapping
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            // Use a slightly lighter background if empty, or the solid color if filled
+            .background(isEmpty ? color.opacity(0.8) : color)
+            .cornerRadius(10) // Rounded corners
         }
     }
 }
+
 
 // The sheet view for entering a single destination
 struct DestinationSheet: View {
@@ -120,26 +253,34 @@ struct DestinationSheet: View {
     @Environment(\.dismiss) var dismiss
     // Callback function to pass the entered text back to DestinationsView
     var onSave: (String) -> Void
+    // Title passed from the main view
+    let sheetTitle: String
 
-    // Custom initializer to receive the initial text and the callback
-    init(initialText: String, onSave: @escaping (String) -> Void) {
+    // Custom initializer to receive the initial text, title, and the callback
+    init(initialText: String, sheetTitle: String, onSave: @escaping (String) -> Void) {
         // Initialize the @State variable correctly using _ prefix
         _inputText = State(initialValue: initialText)
+        self.sheetTitle = sheetTitle
         self.onSave = onSave
     }
 
     var body: some View {
         NavigationView { // Wrap in NavigationView for title and potential toolbar items
             VStack(alignment: .leading, spacing: 20) {
-                // TextField for entering the destination name
+
+                // ** Basic TextField - MapKit Autocomplete UI is NOT added here **
                 TextField("Enter destination name or address", text: $inputText)
                     .textFieldStyle(.roundedBorder)
                     .padding(.top) // Add some padding above the text field
+                    // If you want it to look similar to the MapKit example's input:
+                    // .padding()
+                    // .background(Color(.systemGray6))
+                    // .cornerRadius(10)
 
                 Spacer() // Push content to top
             }
             .padding() // Padding for the VStack content
-            .navigationTitle("Enter Destination") // Title for the sheet
+            .navigationTitle(sheetTitle) // Use the passed-in title
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 // Add a "Done" button to the toolbar
@@ -164,9 +305,4 @@ struct DestinationSheet: View {
 // Preview provider
 #Preview {
     DestinationsView()
-}
-
-// Extension to make Int identifiable for the .sheet(item:) modifier
-extension Int: Identifiable {
-    public var id: Int { self }
 }
