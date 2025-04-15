@@ -166,6 +166,12 @@ struct DestinationsView: View {
 
 
                 Spacer() // Push content to top if VStack is not filling screen
+                
+                Button("Start Navigation") {
+                    print("Origin is \(origin)")
+                    print(intermediateDestinations)
+                    print("Final destination is \(finalStop)")
+                }
             }
         }
         .ignoresSafeArea(edges: .top) // Allow content (image) to go under status bar

@@ -14,24 +14,19 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
+            DestinationsView()
+                .tabItem {
+                    Label("Destinations", systemImage: "list.bullet")
+                }
+            
             MapView()
                 .tabItem {
                     Label("Map", systemImage: "map")
                 }
 
-            DestinationsView()
-                .tabItem {
-                    Label("Destinations", systemImage: "list.bullet")
-                }
-
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
-                }
-            
-            Test2View()
-                .tabItem {
-                    Label("Test", systemImage: "square.and.arrow.up")
                 }
         }
     }
