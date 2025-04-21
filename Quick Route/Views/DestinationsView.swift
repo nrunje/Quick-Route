@@ -10,8 +10,8 @@ import CoreLocation
 import MapKit
 import SwiftUI
 
-// Define what kind of destination item we are editing
-// Needed for the .sheet(item:) modifier to work with different types
+/// Define what kind of destination item we are editing
+/// Needed for the .sheet(item:) modifier to work with different types
 enum EditableItem: Identifiable, Hashable {
     case origin
     case finalStop
@@ -27,21 +27,22 @@ enum EditableItem: Identifiable, Hashable {
     }
 }
 
-// Main view displaying the list of destination buttons
+/// Main view to display Destinations page
 struct DestinationsView: View {
-    // State for the fixed points
+    /// State for origin point
     @State private var origin: String = ""
+    /// State for the final stop
     @State private var finalStop: String = ""
-    // State variable to hold the list of INTERMEDIATE destination strings.
+    /// State to hold the list of INTERMEDIATE destination strings.
     @State private var intermediateDestinations: [String] = [] // Start empty now
-    // State variable to track which item is being edited via the sheet.
+    /// State to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil // Use the new enum
+    /// State to track if geocoding is ongoing
     @State private var isPlanningRoute: Bool = false
-
-    // **** Add state to hold the calculated route ****
+    ///  Add to hold the calculated route
     @State private var calculatedRoute: MKRoute? = nil
 
-    // Helper function to get sheet parameters based on the item
+    /// Helper function to get sheet parameters based on the item
     static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
         switch item {
         case .origin:
@@ -60,6 +61,7 @@ struct DestinationsView: View {
         }
     }
 
+    /// Main body view
     var body: some View {
         // **** Outer VStack to hold ScrollView and Bottom Buttons ****
         VStack(spacing: 0) {
@@ -187,14 +189,14 @@ struct DestinationsView: View {
                 } // End of inner VStack
             } // End of ScrollView
             .ignoresSafeArea(edges: .top) // Allow content (image) to go under status bar
-            
+
             // BUTTON FOR QUICK FILL (DELETE)
             Button {
-                origin = "San Francisco"
-                finalStop = "New York"
-                intermediateDestinations = ["Los Angeles", "San Diego"]
+                origin = "123 Queen Anne Ave N, Seattle, WA, United States"
+                finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
+                intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
             } label: {
-               Text("Quick fill")
+                Text("Quick fill")
             }
             // THIS NEEDS TO BE DELETED
 
@@ -214,26 +216,43 @@ struct DestinationsView: View {
 
                     // Test the origin, intermediate destinations, and final stop by printing
                     // routePlanner.getCoordinateFrom returns a CLLocationCoordinate2D optional
+                    // Last worked on Apr 21, 2025
+//                    Task {
+//                        do {
+//                            if let originCoord = try await routePlanner.getCoordinateFrom(address: origin) {
+//                                print("Origin: \(originCoord)")
+//                            }
+//
+//                            for addr in intermediateDestinations {
+//                                if let intermediateCoord = try await routePlanner.getCoordinateFrom(address: addr) {
+//                                    print("Intermediate: \(intermediateCoord)")
+//                                }
+//                            }
+//
+//                            if let finalCoord = try await routePlanner.getCoordinateFrom(address: finalStop) {
+//                                print("Final stop: \(finalCoord)")
+//                            }
+//
+//                            isPlanningRoute = false
+//
+//                        } catch {
+//                            print("Error geocoding address: \(error)")
+//                        }
+//                    }
+
+                    // Test getting directions
                     Task {
                         do {
-                            if let originCoord = try await routePlanner.getCoordinateFrom(address: origin) {
-                                print("Origin: \(originCoord)")
+                            // Request directions
+                            if let route = try await routePlanner.buildMKRoute() {
+                                // Do something with the route
+                                print("Route found: \(route)")
+                                // For example, you can pass the route to the map view or display it
+                            } else {
+                                print("No route found.")
                             }
-
-                            for addr in intermediateDestinations {
-                                if let intermediateCoord = try await routePlanner.getCoordinateFrom(address: addr) {
-                                    print("Intermediate: \(intermediateCoord)")
-                                }
-                            }
-
-                            if let finalCoord = try await routePlanner.getCoordinateFrom(address: finalStop) {
-                                print("Final stop: \(finalCoord)")
-                            }
-                            
-                            isPlanningRoute = false
-
                         } catch {
-                            print("Error geocoding address: \(error)")
+                            print("Error getting directions: \(error)")
                         }
                     }
 
@@ -269,8 +288,6 @@ struct DestinationsView: View {
             .padding(.horizontal) // Padding for the HStack
             .padding(.vertical, 10) // Padding above/below buttons
             .background(.bar) // Give buttons a background context (adapts to light/dark)
-            
-            
         } // End of outer VStack
         // --- SHEET PRESENTATION ---
         .sheet(item: $editingItem) { item in
@@ -311,13 +328,13 @@ struct DestinationsView: View {
         } // --- End of .sheet modifier ---
     } // End of body
 
-    // **** Function to remove items from the intermediate list ****
+    /// Function to remove items from the intermediate list
     func removeIntermediateStop(at offsets: IndexSet) {
         intermediateDestinations.remove(atOffsets: offsets)
         print("Removed intermediate stop at offsets: \(offsets). Count: \(intermediateDestinations.count)")
     }
 
-    // **** Helper function to calculate List height (adjust rowHeight estimate) ****
+    /// Helper function to calculate List height (adjust rowHeight estimate)
     func calculateListHeight() -> CGFloat {
         // Estimate the height of one DestinationButtonView row + padding
         // Adjust this value based on your actual DestinationButtonView layout + .padding(.bottom, 10)
@@ -328,7 +345,7 @@ struct DestinationsView: View {
     }
 } // End of DestinationsView
 
-// Helper View for the Button Style (extracted for clarity)
+/// Helper View for the Button Style (extracted for clarity)
 struct DestinationButtonView: View {
     let text: String
     let placeholder: String
