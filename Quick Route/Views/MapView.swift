@@ -16,6 +16,7 @@ struct MapView: View {
         center: CLLocationCoordinate2D(latitude: 39.8283, longitude: -98.5795), // Default: Center of continental US (approx.)
         span: MKCoordinateSpan(latitudeDelta: 35.0, longitudeDelta: 65.0) // Zoom level to fit continental US
     )
+    @State private var routeLocations: [LabeledLocation] = [] // Variable to track 
 
     // State to track if the initial centering has happened
     @State private var hasCenteredOnUser = false

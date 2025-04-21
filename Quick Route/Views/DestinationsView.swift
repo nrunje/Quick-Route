@@ -202,6 +202,7 @@ struct DestinationsView: View {
                     )
 
                     // Test the origin, intermediate destinations, and final stop by printing
+                    // routePlanner.getCoordinateFrom returns a CLLocationCoordinate2D optional
                     Task {
                         do {
                             if let originCoord = try await routePlanner.getCoordinateFrom(address: origin) {
