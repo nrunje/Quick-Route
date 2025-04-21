@@ -7,6 +7,8 @@
 //
 
 import SwiftUI
+import CoreLocation
+import MapKit
 
 // Define what kind of destination item we are editing
 // Needed for the .sheet(item:) modifier to work with different types
@@ -30,12 +32,14 @@ struct DestinationsView: View {
     // State for the fixed points
     @State private var origin: String = ""
     @State private var finalStop: String = ""
-
     // State variable to hold the list of INTERMEDIATE destination strings.
     @State private var intermediateDestinations: [String] = [] // Start empty now
-
     // State variable to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil // Use the new enum
+    @State private var isPlanningRoute: Bool = false
+    
+    // **** Add state to hold the calculated route ****
+    @State private var calculatedRoute: MKRoute? = nil
 
     // Helper function to get sheet parameters based on the item
     static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
@@ -193,27 +197,25 @@ struct DestinationsView: View {
             // --- BOTTOM BUTTONS ---
             HStack(spacing: 15) {
                 // Go Button
-                 Button {
-                     // Action to print the route details
-                     print("\n--- Route Details ---")
-                     print("Origin: \(origin.isEmpty ? "Not Set" : origin)")
-                     // Filter intermediate destinations to only print non-empty ones
-                     let validStops = intermediateDestinations.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                     print("Stops: \(validStops)")
-                     print("Final: \(finalStop.isEmpty ? "Not Set" : finalStop)")
-                     print("---------------------\n")
+                Button {
+                    isPlanningRoute = true
+                    calculatedRoute = nil // Clear previous route
 
-                     // Placeholder for actual navigation logic
-                     // Add navigation logic here later
-                 } label: {
-                     Text("Go")
-                         .font(.headline)
-                         .padding()
-                         .frame(maxWidth: .infinity) // Make buttons share width
-                         .background(Color.blue)     // Go button color
-                         .foregroundColor(.white)
-                         .cornerRadius(10)
-                 }
+                    var routePlanner = RoutePlanner(
+                        origin: origin,
+                        intermediateDestinations: intermediateDestinations,
+                        finalStop: finalStop
+                    )
+
+                } label: {
+                     // ... (ProgressView or Text label based on isPlanningRoute) ...
+                     if isPlanningRoute {
+                         ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
+                     } else {
+                         Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                     }
+                }
+                .disabled(isPlanningRoute || origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || finalStop.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                  // Clear Button
                  Button {
@@ -221,6 +223,8 @@ struct DestinationsView: View {
                      origin = ""
                      finalStop = ""
                      intermediateDestinations = []
+                     isPlanningRoute = false
+                     calculatedRoute = nil
                      print("Route Cleared")
                  } label: {
                      Text("Clear")
