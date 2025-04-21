@@ -6,9 +6,9 @@
 //  Last Updated: 4/15/25 (Incorporating List, Swipe Delete, Buttons)
 //
 
-import SwiftUI
 import CoreLocation
 import MapKit
+import SwiftUI
 
 // Define what kind of destination item we are editing
 // Needed for the .sheet(item:) modifier to work with different types
@@ -22,7 +22,7 @@ enum EditableItem: Identifiable, Hashable {
         switch self {
         case .origin: return "origin"
         case .finalStop: return "finalStop"
-        case .intermediate(let index): return "intermediate_\(index)"
+        case let .intermediate(index): return "intermediate_\(index)"
         }
     }
 }
@@ -37,7 +37,7 @@ struct DestinationsView: View {
     // State variable to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil // Use the new enum
     @State private var isPlanningRoute: Bool = false
-    
+
     // **** Add state to hold the calculated route ****
     @State private var calculatedRoute: MKRoute? = nil
 
@@ -48,7 +48,7 @@ struct DestinationsView: View {
             return (text: origin, title: "Set Origin Point")
         case .finalStop:
             return (text: finalStop, title: "Set Final Destination")
-        case .intermediate(let index):
+        case let .intermediate(index):
             // Safely check index
             if intermediateDestinations.indices.contains(index) {
                 return (text: intermediateDestinations[index], title: "Edit Stop \(index + 1)")
@@ -59,7 +59,6 @@ struct DestinationsView: View {
             }
         }
     }
-
 
     var body: some View {
         // **** Outer VStack to hold ScrollView and Bottom Buttons ****
@@ -95,7 +94,6 @@ struct DestinationsView: View {
                         .padding(.bottom, 5) // Space below title
                     // --- END: PAGE TITLE ---
 
-
                     // --- ORIGIN BUTTON ---
                     DestinationButtonView(
                         text: origin,
@@ -108,7 +106,6 @@ struct DestinationsView: View {
                     }
                     .padding(.horizontal) // Horizontal padding for the button
                     .padding(.bottom, 10) // Space below button
-
 
                     // --- INTERMEDIATE DESTINATIONS ---
                     // Conditionally display header and List only if not empty
@@ -139,15 +136,15 @@ struct DestinationsView: View {
                                     Color.clear
                                         .contentShape(Rectangle())
                                         .onTapGesture {
-                                             print("Intermediate Item \(index + 1) tapped for edit")
-                                             editingItem = .intermediate(index: index) // Set editing item
+                                            print("Intermediate Item \(index + 1) tapped for edit")
+                                            editingItem = .intermediate(index: index) // Set editing item
                                         }
                                 }
                                 // Remove list row separator/padding for cleaner look
-                                 .listRowInsets(EdgeInsets())
-                                 .listRowSeparator(.hidden)
-                                 .padding(.horizontal) // Apply horizontal padding here
-                                 .padding(.bottom, 20) // Apply bottom padding here
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.hidden)
+                                .padding(.horizontal) // Apply horizontal padding here
+                                .padding(.bottom, 20) // Apply bottom padding here
                             }
                             .onDelete(perform: removeIntermediateStop) // Enable swipe delete
                         }
@@ -157,39 +154,36 @@ struct DestinationsView: View {
                     } // End of conditional rendering for List
                     // --- END: INTERMEDIATE DESTINATIONS ---
 
-
                     // --- ADD INTERMEDIATE STOP BUTTON ---
-                     Button {
-                          intermediateDestinations.append("") // Just add an empty slot
-                          print("Added new intermediate stop slot. Count: \(intermediateDestinations.count)")
-                     } label: {
-                          HStack {
-                              Image(systemName: "plus.circle.fill")
-                              Text("Add Intermediate Stop")
-                          }
-                          .padding()
-                          .frame(maxWidth: .infinity)
-                          .background(Color.secondary.opacity(0.2))
-                          .foregroundColor(.blue)
-                          .cornerRadius(10)
-                     }
-                     .padding(.horizontal)
-                     .padding(.bottom, 10)
-
+                    Button {
+                        intermediateDestinations.append("") // Just add an empty slot
+                        print("Added new intermediate stop slot. Count: \(intermediateDestinations.count)")
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Intermediate Stop")
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color.secondary.opacity(0.2))
+                        .foregroundColor(.blue)
+                        .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
 
                     // --- FINAL STOP BUTTON ---
-                     DestinationButtonView(
-                         text: finalStop,
-                         placeholder: "Set Final Destination",
-                         isEmpty: finalStop.isEmpty,
-                         color: .purple // Example color for final stop
-                     ) {
-                          print("Final Stop Button tapped")
-                          editingItem = .finalStop // Set editing item to final stop
-                     }
-                     .padding(.horizontal) // Horizontal padding for the button
-                     .padding(.bottom, 10) // Space below button
-
+                    DestinationButtonView(
+                        text: finalStop,
+                        placeholder: "Set Final Destination",
+                        isEmpty: finalStop.isEmpty,
+                        color: .purple // Example color for final stop
+                    ) {
+                        print("Final Stop Button tapped")
+                        editingItem = .finalStop // Set editing item to final stop
+                    }
+                    .padding(.horizontal) // Horizontal padding for the button
+                    .padding(.bottom, 10) // Space below button
                 } // End of inner VStack
             } // End of ScrollView
             .ignoresSafeArea(edges: .top) // Allow content (image) to go under status bar
@@ -207,39 +201,60 @@ struct DestinationsView: View {
                         finalStop: finalStop
                     )
 
+                    // Test the origin, intermediate destinations, and final stop by printing
+                    Task {
+                        do {
+                            if let originCoord = try await routePlanner.getCoordinateFrom(address: origin) {
+                                print("Origin: \(originCoord)")
+                            }
+
+                            for addr in intermediateDestinations {
+                                if let intermediateCoord = try await routePlanner.getCoordinateFrom(address: addr) {
+                                    print("Intermediate: \(intermediateCoord)")
+                                }
+                            }
+
+                            if let finalCoord = try await routePlanner.getCoordinateFrom(address: finalStop) {
+                                print("Final stop: \(finalCoord)")
+                            }
+
+                        } catch {
+                            print("Error geocoding address: \(error)")
+                        }
+                    }
+
                 } label: {
-                     // ... (ProgressView or Text label based on isPlanningRoute) ...
-                     if isPlanningRoute {
-                         ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
-                     } else {
-                         Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
-                     }
+                    // ... (ProgressView or Text label based on isPlanningRoute) ...
+                    if isPlanningRoute {
+                        ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
+                    } else {
+                        Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                    }
                 }
                 .disabled(isPlanningRoute || origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || finalStop.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                 // Clear Button
-                 Button {
-                     // Action to clear all destinations
-                     origin = ""
-                     finalStop = ""
-                     intermediateDestinations = []
-                     isPlanningRoute = false
-                     calculatedRoute = nil
-                     print("Route Cleared")
-                 } label: {
-                     Text("Clear")
-                         .font(.headline)
-                         .padding()
-                         .frame(maxWidth: .infinity) // Make buttons share width
-                         .background(Color.red)      // Clear button color
-                         .foregroundColor(.white)
-                         .cornerRadius(10)
-                 }
+                // Clear Button
+                Button {
+                    // Action to clear all destinations
+                    origin = ""
+                    finalStop = ""
+                    intermediateDestinations = []
+                    isPlanningRoute = false
+                    calculatedRoute = nil
+                    print("Route Cleared")
+                } label: {
+                    Text("Clear")
+                        .font(.headline)
+                        .padding()
+                        .frame(maxWidth: .infinity) // Make buttons share width
+                        .background(Color.red) // Clear button color
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
             }
             .padding(.horizontal) // Padding for the HStack
             .padding(.vertical, 10) // Padding above/below buttons
             .background(.bar) // Give buttons a background context (adapts to light/dark)
-
         } // End of outer VStack
         // --- SHEET PRESENTATION ---
         .sheet(item: $editingItem) { item in
@@ -266,8 +281,8 @@ struct DestinationsView: View {
                     print("Origin updated to: \(trimmedText)")
                 case .finalStop:
                     finalStop = trimmedText
-                     print("Final Stop updated to: \(trimmedText)")
-                case .intermediate(let index):
+                    print("Final Stop updated to: \(trimmedText)")
+                case let .intermediate(index):
                     // Safely update intermediate destination
                     if intermediateDestinations.indices.contains(index) {
                         intermediateDestinations[index] = trimmedText
@@ -295,9 +310,7 @@ struct DestinationsView: View {
         // Return calculated height, ensuring it's non-negative
         return max(0, listContentHeight)
     }
-
 } // End of DestinationsView
-
 
 // Helper View for the Button Style (extracted for clarity)
 struct DestinationButtonView: View {
@@ -333,5 +346,5 @@ struct DestinationButtonView: View {
 // Preview provider
 #Preview {
     DestinationsView()
-        // Add environment objects here if your DestinationSheet or AddressCompleter need them
+    // Add environment objects here if your DestinationSheet or AddressCompleter need them
 }
