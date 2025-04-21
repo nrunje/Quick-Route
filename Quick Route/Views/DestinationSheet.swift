@@ -76,7 +76,7 @@ struct DestinationSheet: View {
                         }
                     }
                     .listStyle(.plain) // Use plain style to avoid extra separators/inset
-                    .frame(maxHeight: 250) // Limit height to prevent taking too much space
+                    .frame(maxHeight: .infinity) // Limit height to prevent taking too much space
                     .padding(.horizontal) // Match horizontal padding of TextField
                     .transition(.opacity.animation(.easeInOut(duration: 0.2))) // Add smooth transition
                 }

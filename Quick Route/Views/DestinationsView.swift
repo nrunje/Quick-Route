@@ -187,11 +187,22 @@ struct DestinationsView: View {
                 } // End of inner VStack
             } // End of ScrollView
             .ignoresSafeArea(edges: .top) // Allow content (image) to go under status bar
+            
+            // BUTTON FOR QUICK FILL (DELETE)
+            Button {
+                origin = "San Francisco"
+                finalStop = "New York"
+                intermediateDestinations = ["Los Angeles", "San Diego"]
+            } label: {
+               Text("Quick fill")
+            }
+            // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---
             HStack(spacing: 15) {
                 // Go Button
                 Button {
+                    print("Go button clicked")
                     isPlanningRoute = true
                     calculatedRoute = nil // Clear previous route
 
@@ -218,6 +229,8 @@ struct DestinationsView: View {
                             if let finalCoord = try await routePlanner.getCoordinateFrom(address: finalStop) {
                                 print("Final stop: \(finalCoord)")
                             }
+                            
+                            isPlanningRoute = false
 
                         } catch {
                             print("Error geocoding address: \(error)")
@@ -256,6 +269,8 @@ struct DestinationsView: View {
             .padding(.horizontal) // Padding for the HStack
             .padding(.vertical, 10) // Padding above/below buttons
             .background(.bar) // Give buttons a background context (adapts to light/dark)
+            
+            
         } // End of outer VStack
         // --- SHEET PRESENTATION ---
         .sheet(item: $editingItem) { item in

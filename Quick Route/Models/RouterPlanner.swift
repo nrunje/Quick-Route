@@ -64,4 +64,62 @@ struct RoutePlanner {
             }
         }
     }
+
+    /// Returns the directions for the route (origin -> intermediate stops -> final stop).
+    func getRouteDirections() async throws -> MKRoute? {
+        // First, get the coordinates for all addresses
+        var coordinates: [CLLocationCoordinate2D] = []
+
+        // Get origin
+        if let originCoord = try await getCoordinateFrom(address: originAddress) {
+            coordinates.append(originCoord)
+        }
+
+        // Get intermediate destinations
+        for address in intermediateAddressStrings {
+            if let intermediateCoord = try await getCoordinateFrom(address: address) {
+                coordinates.append(intermediateCoord)
+            }
+        }
+
+        // Get final destination
+        if let finalCoord = try await getCoordinateFrom(address: finalAddress) {
+            coordinates.append(finalCoord)
+        }
+
+        // Check that we have at least two coordinates (origin and final destination)
+        guard coordinates.count > 1 else {
+            throw NSError(domain: "RoutePlanner", code: 0, userInfo: [NSLocalizedDescriptionKey: "Not enough locations to form a route."])
+        }
+
+        // Request directions
+        let directionsRequest = MKDirections.Request()
+
+        // Add waypoints to the directions request
+        let originPlacemark = MKPlacemark(coordinate: coordinates[0])
+        directionsRequest.source = MKMapItem(placemark: originPlacemark)
+
+        var previousPlacemark = originPlacemark
+        for i in 1 ..< coordinates.count {
+            let waypointPlacemark = MKPlacemark(coordinate: coordinates[i])
+            let waypointItem = MKMapItem(placemark: waypointPlacemark)
+
+            // Set destination for the current segment
+            directionsRequest.destination = waypointItem
+            directionsRequest.transportType = .automobile
+
+            let directions = MKDirections(request: directionsRequest)
+            let response = try await directions.calculate()
+
+            // Take the first route found
+            if let route = response.routes.first {
+                // Add the route from the current segment to the previous route
+                return route
+            }
+
+            previousPlacemark = waypointPlacemark
+        }
+
+        return nil
+    }
 }
