@@ -9,6 +9,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import Combine
 
 /// Define what kind of destination item we are editing
 /// Needed for the .sheet(item:) modifier to work with different types
@@ -39,6 +40,8 @@ struct DestinationsView: View {
     @State private var editingItem: EditableItem? = nil // Use the new enum
     /// State to track if geocoding is ongoing
     @State private var isPlanningRoute: Bool = false
+    /// Route objects
+//    @EnvironmentObject var calcualatedRoute: [MKRoute]? = nil
 
     /// Helper function to get sheet parameters based on the item
     static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
