@@ -39,8 +39,6 @@ struct DestinationsView: View {
     @State private var editingItem: EditableItem? = nil // Use the new enum
     /// State to track if geocoding is ongoing
     @State private var isPlanningRoute: Bool = false
-    ///  Add to hold the calculated route
-    @State private var calculatedRoute: MKRoute? = nil
 
     /// Helper function to get sheet parameters based on the item
     static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
@@ -206,7 +204,6 @@ struct DestinationsView: View {
                 Button {
                     print("Go button clicked")
                     isPlanningRoute = true
-                    calculatedRoute = nil // Clear previous route
 
                     var routePlanner = RoutePlanner(
                         origin: origin,
@@ -244,13 +241,16 @@ struct DestinationsView: View {
                     Task {
                         do {
                             // Request directions
-                            if let route = try await routePlanner.buildMKRoute() {
+                            if let routes = try await routePlanner.buildMKRoutes() {
                                 // Do something with the route
-                                print("Route found: \(route)")
+                                print("Route found: \(routes)")
                                 // For example, you can pass the route to the map view or display it
+                                
                             } else {
                                 print("No route found.")
                             }
+                            
+                            isPlanningRoute = false
                         } catch {
                             print("Error getting directions: \(error)")
                         }
@@ -273,7 +273,6 @@ struct DestinationsView: View {
                     finalStop = ""
                     intermediateDestinations = []
                     isPlanningRoute = false
-                    calculatedRoute = nil
                     print("Route Cleared")
                 } label: {
                     Text("Clear")

@@ -65,52 +65,98 @@ struct RoutePlanner {
         }
     }
 
-    func buildMKRoute() async throws -> MKRoute? {
-        // Get coordinates
+    /// Builds an array of MKRoute objects for each segment of the multi-stop route.
+    ///
+    /// This function first geocodes all addresses to get their coordinates. Then, it
+    /// calculates directions for each leg of the journey: origin to the first waypoint,
+    /// each waypoint to the next, and finally the last waypoint to the final destination.
+    ///
+    /// - Returns: An array of `MKRoute` objects, one for each segment of the route,
+    ///            or `nil` if the route cannot be calculated (e.g., origin/destination
+    ///            cannot be geocoded, or no routes found for any segment).
+    /// - Throws: An error if geocoding *fails* (system/network issue) or if a route
+    ///           calculation *fails* (system/network issue with directions service).
+    func buildMKRoutes() async throws -> [MKRoute]? { // Changed return type to [MKRoute]?
+        print("Building MKRoutes")
+
+        // Get coordinates for origin and final destination.
+        // getCoordinateFrom throws on *failure*, returns nil on *no result*.
+        // If origin or final cannot be geocoded (returns nil), we cannot plan the route.
         guard let originCoord = try await getCoordinateFrom(address: originAddress),
               let finalCoord = try await getCoordinateFrom(address: finalAddress) else {
-            return nil
+            print("Could not geocode origin or final destination address. Cannot plan route.")
+            return nil // Cannot calculate route if origin or final is unknown
         }
 
         let originMapItem = MKMapItem(placemark: MKPlacemark(coordinate: originCoord))
         let finalMapItem = MKMapItem(placemark: MKPlacemark(coordinate: finalCoord))
 
-        // Convert intermediate addresses to MKMapItems
+        // Convert intermediate addresses to MKMapItems, skipping those that return nil from geocoding
         var intermediateMapItems: [MKMapItem] = []
-
         for address in intermediateAddressStrings {
-            if let coord = try await getCoordinateFrom(address: address) {
+            if let coord = try await getCoordinateFrom(address: address) { // getCoordinateFrom throws on failure
                 let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coord))
                 intermediateMapItems.append(mapItem)
+            } else {
+                // Geocoding returned nil for this intermediate address - skip it but continue
+                print("Could not geocode intermediate address: \(address). Skipping this stop.")
             }
         }
 
-        // Prepare route segments
-        var route: MKRoute?
-        var currentSource = originMapItem
+        // Prepare all stops in order: origin, intermediates, final
+        var allStops: [MKMapItem] = [originMapItem]
+        allStops.append(contentsOf: intermediateMapItems)
+        allStops.append(finalMapItem)
 
-        for waypoint in intermediateMapItems + [finalMapItem] {
+        // If after successful geocoding of origin/final, and adding valid intermediates,
+        // we still have less than 2 stops, a route is impossible.
+        if allStops.count < 2 {
+            print("Not enough valid locations (origin, final, and intermediates) to form a route.")
+            return nil // Cannot calculate route with less than 2 valid points
+        }
+
+        var routeSegments: [MKRoute] = [] // Array to hold each route segment
+        var currentSource = allStops[0] // Start with the origin
+
+        // Iterate through the stops, calculating a route for each segment
+        for i in 1 ..< allStops.count {
+            let destination = allStops[i]
+
             let request = MKDirections.Request()
             request.source = currentSource
-            request.destination = waypoint
-            request.transportType = .automobile
+            request.destination = destination
+            request.transportType = .automobile // Or choose other transport types as needed
+            request.requestsAlternateRoutes = false // Usually you want just one route per segment
+
+            print("Calculating route from \(currentSource.placemark.coordinate.latitude), \(currentSource.placemark.coordinate.longitude) to \(destination.placemark.coordinate.latitude), \(destination.placemark.coordinate.longitude)")
 
             let directions = MKDirections(request: request)
-            let response = try await directions.calculate()
-            if route == nil {
-                route = response.routes.first
-            } else {
-                // You can aggregate routes here if needed
-                route = response.routes.first
+            do {
+                let response = try await directions.calculate() // calculate throws on *failure*
+                if let route = response.routes.first {
+                    // Route found for this segment
+                    routeSegments.append(route)
+                    print("Successfully calculated route segment \(i).")
+                } else {
+                    // calculate succeeded, but found no routes for this segment.
+                    // This means the route *cannot be calculated* as planned.
+                    print("No route found for segment \(i). Cannot complete multi-stop route.")
+                    return nil // Return nil if *any* segment fails to find a route
+                }
+            } catch {
+                // calculate failed due to a system/network error - throw it
+                print("Error calculating route for segment \(i): \(error.localizedDescription). Throwing error.")
+                throw error // Re-throw the error if a route calculation *fails*
             }
 
-            currentSource = waypoint
+            // The destination of the current segment becomes the source for the next
+            currentSource = destination
         }
 
-        return route
+        // If we successfully calculated a route for every segment in the loop,
+        // the routeSegments array will not be empty (since allStops.count >= 2).
+        // We return the array.
+        print("Finished building MKRoutes. Found \(routeSegments.count) segments.")
+        return routeSegments // Return the array of successfully calculated route segments
     }
-
-
-
-    
 }
