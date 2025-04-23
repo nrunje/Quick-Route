@@ -26,4 +26,8 @@ class RouteViewModel: Observable, ObservableObject {
     
     /// Checking if geocoding is ongoing
     @Published var isPlanningRoute: Bool = false
+    
+    /// Routes
+    @Published var routes: [MKRoute]? = nil
+    
 }

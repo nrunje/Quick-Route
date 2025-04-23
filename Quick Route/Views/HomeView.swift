@@ -68,32 +68,21 @@ struct HomeView: View {
 
                         // List of waypoints
                         List {
-                            ForEach(routeViewModel.intermediateDestinations.indices, id: \.self) { index in
-                                ZStack {
-                                    DestinationButtonView(
-                                        text: routeViewModel.intermediateDestinations[index],
-                                        placeholder: "Stop \(index + 1)",
-                                        isEmpty: routeViewModel.intermediateDestinations[index].isEmpty,
-                                        color: routeViewModel.intermediateDestinations[index].isEmpty ? .blue : .green
-                                    ) {
-                                        // Action handled by onTapGesture below
+                            ForEach(routeViewModel.intermediateDestinations, id: \.self) { destination in
+                                DestinationButtonView(
+                                    text: destination,
+                                    placeholder: "Enter waypoint",
+                                    isEmpty: destination.isEmpty,
+                                    color: destination.isEmpty ? .blue : .green
+                                ) {
+                                    if let idx = routeViewModel.intermediateDestinations.firstIndex(of: destination) {
+                                        editingItem = .intermediate(index: idx)
                                     }
-                                    .buttonStyle(.plain) // Prevents visual conflicts
-
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            print("Intermediate Item \(index + 1) tapped for edit")
-                                            editingItem = .intermediate(index: index) // Set editing item
-                                        }
                                 }
-                                // Remove list row separator/padding for cleaner look
-                                .listRowInsets(EdgeInsets())
-                                .listRowSeparator(.hidden)
-                                .padding(.horizontal) // Apply horizontal padding here
-                                .padding(.bottom, 25) // Apply bottom padding here
                             }
-                            .onDelete(perform: removeIntermediateStop)
+                            .onDelete { indexSet in
+                                routeViewModel.intermediateDestinations.remove(atOffsets: indexSet)
+                            }
                         }
                         .listStyle(.plain)
                         .frame(height: calculateListHeight())
@@ -145,6 +134,9 @@ struct HomeView: View {
                 // --- GO BUTTON ---
                 Button {
                     print("Go button clicked")
+                    print(routeViewModel.origin)
+                    print(routeViewModel.intermediateDestinations)
+                    print(routeViewModel.finalStop)
                 } label: {
                     Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
                 }
@@ -154,7 +146,7 @@ struct HomeView: View {
                 Button {
                     print("Clear button clicked")
                     routeViewModel.origin = ""
-//                    routeViewModel.intermediateDestinations = []
+                    routeViewModel.intermediateDestinations = []
                     routeViewModel.finalStop = ""
                 } label: {
                     Text("Clear")

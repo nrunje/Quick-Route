@@ -19,6 +19,11 @@ struct ContentView: View {
                     Image(systemName: "house.fill") // This is the home icon
                     Text("Home")
                 }
+
+            MapView()
+                .tabItem {
+                    Label("Map", systemImage: "map")
+                }
         }
         // **** Inject the ViewModel into the environment ****
         // All child views within this TabView hierarchy can now access it
