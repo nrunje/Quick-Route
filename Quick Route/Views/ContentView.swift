@@ -10,30 +10,19 @@ import MapKit
 import SwiftUI
 
 struct ContentView: View {
-//    @ObservedObject var locationManager = LocationManager.shared
+    @StateObject private var routeViewModel = RouteViewModel()
 
     var body: some View {
         TabView {
-            DestinationsView()
+            HomeView()
                 .tabItem {
-                    Label("Destinations", systemImage: "list.bullet")
-                }
-            
-            MapView()
-                .tabItem {
-                    Label("Map", systemImage: "map")
-                }
-
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-            
-            MapViewTest()
-                .tabItem {
-                    Label("Test Map", systemImage: "map")
+                    Image(systemName: "house.fill") // This is the home icon
+                    Text("Home")
                 }
         }
+        // **** Inject the ViewModel into the environment ****
+        // All child views within this TabView hierarchy can now access it
+        .environmentObject(routeViewModel)
     }
 }
 
