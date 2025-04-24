@@ -64,7 +64,7 @@ struct HomeView: View {
                         Text("Add Stops:")
                             .font(.headline)
                             .padding(.horizontal)
-                            .padding(.bottom, 5)
+//                            .padding(.bottom, 5)
 
                         // List of waypoints
                         List {
@@ -120,14 +120,19 @@ struct HomeView: View {
                     .padding(.horizontal) // Horizontal padding for the button
                     .padding(.bottom, 10) // Space below button
                     // --- END: FINAL STOP BUTTON ---
-
-                    // SAMPLE TEXT
-                    Text(routeViewModel.sampleText)
-                        .padding(.horizontal)
-                    // --- END: SAMPLE TEXT ---
                 }
             } // END: SCROLLVIEW
             .ignoresSafeArea(edges: .top)
+
+            // BUTTON FOR QUICK FILL (DELETE)
+            Button {
+                routeViewModel.origin = "123 Queen Anne Ave N, Seattle, WA, United States"
+                routeViewModel.finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
+                routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
+            } label: {
+                Text("Test fill")
+            }
+            // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---
             HStack(spacing: 15) {
@@ -137,6 +142,11 @@ struct HomeView: View {
                     print(routeViewModel.origin)
                     print(routeViewModel.intermediateDestinations)
                     print(routeViewModel.finalStop)
+
+                    Task {
+                        await routeViewModel.testGeocode()
+                        
+                    }
                 } label: {
                     Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
                 }
