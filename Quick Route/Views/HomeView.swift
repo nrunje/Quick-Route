@@ -11,6 +11,8 @@ struct HomeView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
     /// State to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil
+    /// State to track if geocoding is ongoing
+    @State private var isPlanningRoute: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -142,6 +144,7 @@ struct HomeView: View {
 //                    print(routeViewModel.origin)
 //                    print(routeViewModel.intermediateDestinations)
 //                    print(routeViewModel.finalStop)
+                    isPlanningRoute = true
 
                     Task {
 //                        await routeViewModel.testGeocode() // Test CLLocationCoordinate2D encoding
@@ -151,10 +154,18 @@ struct HomeView: View {
                         } else {
                             print("Could not compute routes")
                         }
+                        
+                        isPlanningRoute = false
                     }
                 } label: {
-                    Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                    // ... (ProgressView or Text label based on isPlanningRoute) ...
+                    if isPlanningRoute {
+                        ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
+                    } else {
+                        Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                    }
                 }
+                .disabled(isPlanningRoute || routeViewModel.origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || routeViewModel.finalStop.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 // --- END: GO BUTTON ---
 
                 // --- CLEAR BUTTON ---
