@@ -8,7 +8,7 @@
 import MapKit
 import SwiftUI
 
-struct MapView: View {
+struct MapEntireView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
 
     var body: some View {
@@ -30,6 +30,6 @@ struct MapView: View {
 }
 
 #Preview {
-    MapView()
+    MapEntireView()
         .environment(RouteViewModel())
 }
