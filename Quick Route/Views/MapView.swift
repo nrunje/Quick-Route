@@ -18,7 +18,7 @@ struct MapView: View {
                     
                 }
             } else {
-                Text("Please generate a route!")
+                MapPlaceholderView()
             }
         }
     }

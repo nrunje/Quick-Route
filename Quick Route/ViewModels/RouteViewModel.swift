@@ -166,3 +166,5 @@ class RouteViewModel: Observable, ObservableObject {
         return routeSegments // Return the array of successfully calculated route segments
     }
 }
+
+
