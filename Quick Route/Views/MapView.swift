@@ -6,13 +6,20 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct MapView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
 
     var body: some View {
         Group {
-            Text(routeViewModel.sampleText)
+            if let allRoutes = routeViewModel.routes {
+                Map {
+                    
+                }
+            } else {
+                Text("Please generate a route!")
+            }
         }
     }
 }

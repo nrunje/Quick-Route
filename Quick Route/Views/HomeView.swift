@@ -139,13 +139,18 @@ struct HomeView: View {
                 // --- GO BUTTON ---
                 Button {
                     print("Go button clicked")
-                    print(routeViewModel.origin)
-                    print(routeViewModel.intermediateDestinations)
-                    print(routeViewModel.finalStop)
+//                    print(routeViewModel.origin)
+//                    print(routeViewModel.intermediateDestinations)
+//                    print(routeViewModel.finalStop)
 
                     Task {
-                        await routeViewModel.testGeocode()
-                        
+//                        await routeViewModel.testGeocode() // Test CLLocationCoordinate2D encoding
+                        if let allRoutes = try await routeViewModel.buildMKRoutes() {
+                            routeViewModel.routes = allRoutes
+                            print("Routes from routeViewModel: \(routeViewModel.routes!)")
+                        } else {
+                            print("Could not compute routes")
+                        }
                     }
                 } label: {
                     Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
@@ -158,6 +163,7 @@ struct HomeView: View {
                     routeViewModel.origin = ""
                     routeViewModel.intermediateDestinations = []
                     routeViewModel.finalStop = ""
+                    routeViewModel.routes = nil
                 } label: {
                     Text("Clear")
                         .font(.headline)
