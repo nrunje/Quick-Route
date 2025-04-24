@@ -5,8 +5,8 @@
 //  Created by Nicholas Runje on 4/23/25.
 //
 
-import SwiftUI
 import MapKit
+import SwiftUI
 
 struct MapView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
@@ -15,7 +15,11 @@ struct MapView: View {
         Group {
             if let allRoutes = routeViewModel.routes {
                 Map {
-                    
+                    // ----  ROUTE POLYLINES  ----
+                    ForEach(allRoutes, id: \.polyline) { route in
+                        MapPolyline(route.polyline)
+                            .stroke(.blue, lineWidth: 4)
+                    }
                 }
             } else {
                 MapPlaceholderView()
