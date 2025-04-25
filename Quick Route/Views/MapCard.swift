@@ -77,18 +77,26 @@ struct MapCard: View {
         }
     }
     
-    // MARK: Export helper
+//    // MARK: - Export to Apple Maps
 //    private func exportToAppleMaps() {
-//        let options = [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
-//        
-//        if #available(iOS 17, *) {
-//            MKMapItem.openMaps(from: route.source,
-//                               to:   route.destination,
-//                               options: options)
-//        } else {
-//            // Fallback – just open the destination; user can add start in Maps.
-//            route.destination.openInMaps(launchOptions: options)
+//        // 1. Make sure the route actually has map items.
+//        guard let start = route.source,
+//              let end   = route.destination else {
+//            assertionFailure("MKRoute is missing source or destination MapItem")
+//            return
 //        }
+//        
+//        // 2. Decide how you want the route shown (driving, walking, transit…).
+//        let launchOptions: [String : Any] = [
+//            MKLaunchOptionsDirectionsModeKey      : MKLaunchOptionsDirectionsModeDriving,
+//            MKLaunchOptionsShowsTrafficKey        : true,
+//            MKLaunchOptionsMapCenterKey           : NSValue(mkCoordinate: start.placemark.coordinate),
+//            MKLaunchOptionsMapSpanKey             : NSValue(mkCoordinateSpan:
+//                                    MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5))
+//        ]
+//
+//        // 3. Fire up Apple Maps.
+//        MKMapItem.openMaps(with: [start, end], launchOptions: launchOptions)
 //    }
 }
 

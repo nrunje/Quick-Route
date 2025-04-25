@@ -8,7 +8,7 @@
 import MapKit
 import SwiftUI
 
-struct MapView: View {
+struct MapViewOld: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
 
     var body: some View {
@@ -34,6 +34,28 @@ struct MapView: View {
         // You might want a title for the Map screen, requires NavigationView context usually
 //         .navigationTitle("Calculated Routes") // Example if placed within a NavigationView
     }
+}
+
+
+struct MapView: View {
+    @EnvironmentObject var routeViewModel: RouteViewModel
+    
+    var body: some View {
+        Group {
+            if let allRoutes = routeViewModel.routes, !allRoutes.isEmpty {
+                ScrollView {
+                    ForEach(Array(allRoutes.enumerated()), id: \.element.polyline) { idx, route in
+                        MapCard(route: route, index: idx)
+                            // Optional: Add padding around each card if desired
+                            .padding(.horizontal)
+                    }
+                }
+            } else {
+                MapPlaceholderView()
+            }
+        }
+    }
+        
 }
 
 #Preview {
