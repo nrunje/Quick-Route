@@ -12,7 +12,8 @@ import MapKit
 struct MapCard: View {
     let route: MKRoute          // segment to display
     let index: Int              // 0-based position in the trip
-    
+    let addressPair: (String, String) 
+
     @State private var camera: MapCameraPosition = .automatic
     
     // Convenience text for the header
@@ -20,8 +21,10 @@ struct MapCard: View {
     
     // Convenience text for the route subtitle
     private var fromToTitle: String {
-        let start =  "Start"
-        let end   =  "End"
+//        let start =  "\(routeViewModel.legAddressPairs[index].0)"
+//        let end   =  "\(routeViewModel.legAddressPairs[index].1)"
+        let start =  "\(addressPair.0)"
+        let end   =  "\(addressPair.1)"
         return "\(start) → \(end)"
     }
     
@@ -110,5 +113,5 @@ struct MapCard: View {
     dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[0])), forKey: "source")
     dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[1])), forKey: "destination")
     
-    return MapCard(route: dummy, index: 0)
+    return MapCard(route: dummy, index: 0, addressPair: ("Origin", "End"))
 }

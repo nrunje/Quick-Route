@@ -84,6 +84,7 @@ struct HomeView: View {
                             }
                             .onDelete { indexSet in
                                 routeViewModel.intermediateDestinations.remove(atOffsets: indexSet)
+                                routeViewModel.routes = nil
                             }
                         }
                         .listStyle(.plain)
@@ -141,13 +142,14 @@ struct HomeView: View {
                 // --- GO BUTTON ---
                 Button {
                     print("Go button clicked")
-//                    print(routeViewModel.origin)
-//                    print(routeViewModel.intermediateDestinations)
-//                    print(routeViewModel.finalStop)
+                    print(routeViewModel.origin)
+                    print(routeViewModel.intermediateDestinations)
+                    print(routeViewModel.finalStop)
                     isPlanningRoute = true
 
                     Task {
 //                        await routeViewModel.testGeocode() // Test CLLocationCoordinate2D encoding
+
                         if let allRoutes = try await routeViewModel.buildMKRoutes() {
                             routeViewModel.routes = allRoutes
                             print("Routes from routeViewModel: \(routeViewModel.routes!)")
@@ -175,6 +177,7 @@ struct HomeView: View {
                     routeViewModel.intermediateDestinations = []
                     routeViewModel.finalStop = ""
                     routeViewModel.routes = nil
+                    routeViewModel.isPlanningRoute = false
                 } label: {
                     Text("Clear")
                         .font(.headline)

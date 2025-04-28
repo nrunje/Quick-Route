@@ -27,7 +27,7 @@ class RouteViewModel: Observable, ObservableObject {
     /// Checking if geocoding is ongoing
     @Published var isPlanningRoute: Bool = false
     
-    /// Routes
+    /// List of all legs of journey in MKRoute objects
     @Published var routes: [MKRoute]? = nil
     
     @MainActor
@@ -49,6 +49,23 @@ class RouteViewModel: Observable, ObservableObject {
         } catch {
             print("Error geocoding address:", error)
         }
+    }
+    
+    /// Creates a list of tuples of the string address pairs
+    func makeLegAddressPairs() -> [(String, String)]? {
+        // 1. Ordered list of non-blank stops
+        let orderedStops = ([origin] + intermediateDestinations + [finalStop])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        // 2. Need at least A → B
+        guard orderedStops.count >= 2 else { return nil }
+
+        // 3. Zip adjacent elements into tuples
+        let legs = (0 ..< orderedStops.count - 1).map {
+            (orderedStops[$0], orderedStops[$0 + 1])
+        }
+        return legs.isEmpty ? nil : legs
     }
     
     /// Converts a human-readable address into geographic coordinates using Apple's geocoding service.
