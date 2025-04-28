@@ -13,6 +13,10 @@ struct HomeView: View {
     @State private var editingItem: EditableItem? = nil
     /// State to track if geocoding is ongoing
     @State private var isPlanningRoute: Bool = false
+    /// State to turn on validation alert (in case either origin or final stop is left blank)
+    @State private var showValidationAlert = false
+    /// State to display alert message
+    @State private var validationMessage  = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -141,22 +145,35 @@ struct HomeView: View {
             HStack(spacing: 15) {
                 // --- GO BUTTON ---
                 Button {
-                    print("Go button clicked")
-                    print(routeViewModel.origin)
-                    print(routeViewModel.intermediateDestinations)
-                    print(routeViewModel.finalStop)
+                    // ---- 1️⃣ Validate ----
+                    let trimmedOrigin = routeViewModel.origin.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmedFinal  = routeViewModel.finalStop.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                    guard !trimmedOrigin.isEmpty, !trimmedFinal.isEmpty else {
+                        validationMessage = trimmedOrigin.isEmpty && trimmedFinal.isEmpty
+                            ? "Please enter both an origin and a final destination."
+                            : trimmedOrigin.isEmpty
+                                ? "Please enter an origin point."
+                                : "Please enter a final destination."
+                        showValidationAlert = true
+                        return                                 // ⬅️  Skip the rest of the action
+                    }
+                    
                     isPlanningRoute = true
 
-                    Task {
-//                        await routeViewModel.testGeocode() // Test CLLocationCoordinate2D encoding
+                    // --- Clean intermediates first
+                    routeViewModel.intermediateDestinations.removeAll {
+                        $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    }
 
+                    Task {
                         if let allRoutes = try await routeViewModel.buildMKRoutes() {
                             routeViewModel.routes = allRoutes
                             print("Routes from routeViewModel: \(routeViewModel.routes!)")
                         } else {
                             print("Could not compute routes")
                         }
-                        
+
                         isPlanningRoute = false
                     }
                 } label: {
@@ -167,7 +184,7 @@ struct HomeView: View {
                         Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
                     }
                 }
-                .disabled(isPlanningRoute || routeViewModel.origin.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || routeViewModel.finalStop.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isPlanningRoute)
                 // --- END: GO BUTTON ---
 
                 // --- CLEAR BUTTON ---
@@ -197,6 +214,10 @@ struct HomeView: View {
             .background(.bar) // Give buttons a background context (adapts to light/dark)
             // --- END: BOTTOM BUTTONS ---
         } // END: MAIN VSTACK
+        .alert("Missing Information",
+               isPresented: $showValidationAlert,
+               actions: { Button("OK", role: .cancel) { } },
+               message: { Text(validationMessage) })
         // --- SHEET PRESENTATION ---
         .sheet(item: $editingItem) { item in
             // Use the helper function
