@@ -12,6 +12,8 @@ import MapKit
 struct MapCard: View {
     let route: MKRoute          // segment to display
     let index: Int              // 0-based position in the trip
+    let sourceMapItem: MKMapItem
+    let destinationMapItem: MKMapItem
     let addressPair: (String, String)
 
     @State private var camera: MapCameraPosition = .automatic
@@ -21,8 +23,6 @@ struct MapCard: View {
     
     // Convenience text for the route subtitle
     private var fromToTitle: String {
-//        let start =  "\(routeViewModel.legAddressPairs[index].0)"
-//        let end   =  "\(routeViewModel.legAddressPairs[index].1)"
         let start =  "\(addressPair.0)"
         let end   =  "\(addressPair.1)"
         return "\(start) → \(end)"
@@ -103,15 +103,15 @@ struct MapCard: View {
 //    }
 }
 
-#Preview {
-    // Minimal dummy route so the preview compiles
-    let coords = [CLLocationCoordinate2D(latitude: 47.6062, longitude: -122.3321),
-                  CLLocationCoordinate2D(latitude: 47.6101, longitude: -122.2015)]
-    let poly = MKPolyline(coordinates: coords, count: coords.count)
-    let dummy = MKRoute()
-    dummy.setValue(poly,                                         forKey: "polyline")
-    dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[0])), forKey: "source")
-    dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[1])), forKey: "destination")
-    
-    return MapCard(route: dummy, index: 0, addressPair: ("Origin", "End"))
-}
+//#Preview {
+//    // Minimal dummy route so the preview compiles
+//    let coords = [CLLocationCoordinate2D(latitude: 47.6062, longitude: -122.3321),
+//                  CLLocationCoordinate2D(latitude: 47.6101, longitude: -122.2015)]
+//    let poly = MKPolyline(coordinates: coords, count: coords.count)
+//    let dummy = MKRoute()
+//    dummy.setValue(poly,                                         forKey: "polyline")
+//    dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[0])), forKey: "source")
+//    dummy.setValue(MKMapItem(placemark: .init(coordinate: coords[1])), forKey: "destination")
+//    
+//    return MapCard(route: dummy, index: 0, addressPair: ("Origin", "End"))
+//}
