@@ -12,7 +12,7 @@ import MapKit
 struct MapCard: View {
     let route: MKRoute          // segment to display
     let index: Int              // 0-based position in the trip
-    let addressPair: (String, String) 
+    let addressPair: (String, String)
 
     @State private var camera: MapCameraPosition = .automatic
     

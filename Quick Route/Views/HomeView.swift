@@ -3,6 +3,7 @@
 //  Quick Route
 //
 //  Created by Nicholas Runje on 4/22/25.
+//  Updated: 4/28/25 // Updated comment
 //
 
 import SwiftUI
@@ -11,10 +12,16 @@ struct HomeView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
     /// State to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil
+    // Removed local isPlanningRoute state - now uses routeViewModel.isPlanningRoute
+    // @State private var isPlanningRoute: Bool = false
     /// State to turn on validation alert (in case either origin or final stop is left blank)
     @State private var showValidationAlert = false
     /// State to display alert message
     @State private var validationMessage  = ""
+    /// State to potentially show errors from route calculation
+    @State private var showRouteErrorAlert = false
+    @State private var routeErrorMessage = ""
+
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,35 +75,48 @@ struct HomeView: View {
                         Text("Add Stops:")
                             .font(.headline)
                             .padding(.horizontal)
-//                            .padding(.bottom, 5)
+                            .padding(.bottom, 5) // Added padding back
 
                         // List of waypoints
+                        // Use List for dynamic content and swipe-to-delete
                         List {
-                            ForEach(routeViewModel.intermediateDestinations, id: \.self) { destination in
-                                DestinationButtonView(
-                                    text: destination,
-                                    placeholder: "Enter waypoint",
-                                    isEmpty: destination.isEmpty,
-                                    color: destination.isEmpty ? .blue : .green
-                                ) {
-                                    if let idx = routeViewModel.intermediateDestinations.firstIndex(of: destination) {
-                                        editingItem = .intermediate(index: idx)
+                            ForEach(routeViewModel.intermediateDestinations.indices, id: \.self) { index in
+                                // Ensure index is valid before accessing
+                                if routeViewModel.intermediateDestinations.indices.contains(index) {
+                                    let destination = routeViewModel.intermediateDestinations[index]
+                                    DestinationButtonView(
+                                        text: destination,
+                                        placeholder: "Enter waypoint \(index + 1)", // Dynamic placeholder
+                                        isEmpty: destination.isEmpty,
+                                        color: destination.isEmpty ? .blue.opacity(0.6) : .blue // Adjusted colors slightly
+                                    ) {
+                                        editingItem = .intermediate(index: index)
                                     }
+                                    // Apply list row styling if needed, e.g., remove separators
+                                    .listRowInsets(EdgeInsets()) // Remove default padding
+                                    .listRowSeparator(.hidden) // Hide separators
+                                    .padding(.bottom, 8) // Add space between buttons in the list
                                 }
                             }
                             .onDelete { indexSet in
                                 routeViewModel.intermediateDestinations.remove(atOffsets: indexSet)
-                                routeViewModel.routes = nil
+                                // Clear calculated routes if waypoints change
+                                routeViewModel.calculatedRouteLegs = nil
                             }
                         }
-                        .listStyle(.plain)
-                        .frame(height: calculateListHeight())
+                        .listStyle(.plain) // Use plain style to remove default List background/inset
+                        .frame(height: calculateListHeight()) // Calculate height dynamically
+                        // Add horizontal padding to match other elements if List adds its own
+                         .padding(.horizontal)
+
                     }
                     // --- END: WAYPOINTS ---
 
                     // --- ADD WAYPOINT BUTTON ---
                     Button {
                         routeViewModel.intermediateDestinations.append("")
+                        // Clear calculated routes if waypoints change
+                        routeViewModel.calculatedRouteLegs = nil
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle.fill")
@@ -123,20 +143,22 @@ struct HomeView: View {
                         editingItem = .finalStop // Set editing item to final stop
                     }
                     .padding(.horizontal) // Horizontal padding for the button
-                    .padding(.bottom, 10) // Space below button
+                    .padding(.bottom, 20) // More space before bottom buttons
                     // --- END: FINAL STOP BUTTON ---
                 }
             } // END: SCROLLVIEW
             .ignoresSafeArea(edges: .top)
 
-            // BUTTON FOR QUICK FILL (DELETE)
-            Button {
-                routeViewModel.origin = "123 Queen Anne Ave N, Seattle, WA, United States"
-                routeViewModel.finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
-                routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
-            } label: {
-                Text("Test fill")
-            }
+            // BUTTON FOR QUICK FILL (DELETE LATER)
+             Button {
+                 routeViewModel.origin = "123 Queen Anne Ave N, Seattle, WA, United States"
+                 routeViewModel.finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
+                 routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
+                 routeViewModel.calculatedRouteLegs = nil // Clear old routes
+             } label: {
+                 Text("Test fill")
+             }
+             .padding(.bottom, 5)
             // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---
@@ -154,34 +176,54 @@ struct HomeView: View {
                                 ? "Please enter an origin point."
                                 : "Please enter a final destination."
                         showValidationAlert = true
-                        return                                 // ⬅️  Skip the rest of the action
+                        return // Skip the rest
                     }
-                    
-                    routeViewModel.isPlanningRoute = true
 
-                    // --- Clean intermediates first
+                    // ---- 2️⃣ Clean intermediates (ViewModel might do this, but good practice here too) ----
                     routeViewModel.intermediateDestinations.removeAll {
                         $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     }
 
+                    // ---- 3️⃣ Call ViewModel's route building function ----
+                    // ViewModel now manages the isPlanningRoute state internally
                     Task {
-                        if let allRoutes = try await routeViewModel.buildMKRoutes() {
-                            routeViewModel.routes = allRoutes
-                            print("Routes from routeViewModel: \(routeViewModel.routes!)")
-                        } else {
-                            print("Could not compute routes")
-                        }
+                        // No need to manage local isPlanningRoute state
+                        // The ViewModel's @MainActor function will update its @Published properties
+                        await routeViewModel.buildAndStoreRoutes()
 
-                        routeViewModel.isPlanningRoute = false
+                        // Optional: Check if routes were successfully calculated *after* the async call
+                        // You might want to add an error property to the ViewModel
+                        // to display more specific errors (geocoding failed, no route found, etc.)
+                        if routeViewModel.calculatedRouteLegs == nil && !routeViewModel.isPlanningRoute {
+                             // Example: Show a generic error if planning finished but no routes exist
+                             // A more specific error message from the ViewModel would be better.
+                             routeErrorMessage = "Could not calculate the route. Please check the addresses and try again."
+                             showRouteErrorAlert = true
+                        }
                     }
                 } label: {
-                    // ... (ProgressView or Text label based on isPlanningRoute) ...
+                    // Use the ViewModel's state for the button label/indicator
                     if routeViewModel.isPlanningRoute {
-                        ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white) // Ensure spinner is visible on colored background
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            // Use gray when disabled/loading, blue otherwise
+                            .background(Color.gray) // Use gray to indicate loading/disabled state
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     } else {
-                        Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
+                        Text("Go")
+                            .font(.headline)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.blue) // Active color
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     }
                 }
+                // Disable button based on ViewModel's state
                 .disabled(routeViewModel.isPlanningRoute)
                 // --- END: GO BUTTON ---
 
@@ -191,8 +233,10 @@ struct HomeView: View {
                     routeViewModel.origin = ""
                     routeViewModel.intermediateDestinations = []
                     routeViewModel.finalStop = ""
-                    routeViewModel.routes = nil
-                    routeViewModel.isPlanningRoute = false
+                    // Clear the calculated routes using the correct property
+                    routeViewModel.calculatedRouteLegs = nil
+                    // Explicitly set planning to false if clearing during planning (optional, ViewModel should handle)
+                    // routeViewModel.isPlanningRoute = false
                 } label: {
                     Text("Clear")
                         .font(.headline)
@@ -202,11 +246,10 @@ struct HomeView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                 }
-                .padding(.horizontal) // Padding for the HStack
-                .padding(.vertical, 10) // Padding above/below buttons
-                .background(.bar) // Give buttons a background context (adapts to light/dark)
-                // --- END: CLEAR BUTTON ---
-            }
+                 // Optionally disable clear button while planning?
+                 // .disabled(routeViewModel.isPlanningRoute)
+
+            } // END: HSTACK (Bottom Buttons)
             .padding(.horizontal) // Padding for the HStack
             .padding(.vertical, 10) // Padding above/below buttons
             .background(.bar) // Give buttons a background context (adapts to light/dark)
@@ -216,6 +259,10 @@ struct HomeView: View {
                isPresented: $showValidationAlert,
                actions: { Button("OK", role: .cancel) { } },
                message: { Text(validationMessage) })
+        .alert("Route Error", // Alert for route calculation errors
+               isPresented: $showRouteErrorAlert,
+               actions: { Button("OK", role: .cancel) { } },
+               message: { Text(routeErrorMessage) })
         // --- SHEET PRESENTATION ---
         .sheet(item: $editingItem) { item in
             // Use the helper function
@@ -249,29 +296,33 @@ struct HomeView: View {
                         print("Intermediate stop \(index + 1) updated to: \(trimmedText)")
                     }
                 }
+                // Clear calculated routes if any address changes
+                routeViewModel.calculatedRouteLegs = nil
             }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+            .presentationDetents([.medium, .large]) // Allow medium and large sheet sizes
+            .presentationDragIndicator(.visible) // Show the drag indicator
         } // --- End of .sheet modifier ---
-    }
+    } // END: Body
 
-    /// Helper function to calculate List height (adjust rowHeight estimate)
+    /// Helper function to calculate List height dynamically.
+    /// Adjust `rowHeightEstimate` based on your `DestinationButtonView`'s actual height + padding.
     func calculateListHeight() -> CGFloat {
-        // Estimate the height of one DestinationButtonView row + padding
-        // Adjust this value based on your actual DestinationButtonView layout + .padding(.bottom, 10)
-        let rowHeight: CGFloat = 70
-        let listContentHeight = CGFloat(routeViewModel.intermediateDestinations.count) * rowHeight
-        // Return calculated height, ensuring it's non-negative
-        return max(0, listContentHeight)
+        // Estimate the height needed per row in the List.
+        // This includes the DestinationButtonView height and any vertical padding applied *within* the List row.
+        let rowHeightEstimate: CGFloat = 65 // Adjust this based on visual inspection/testing
+        let listContentHeight = CGFloat(routeViewModel.intermediateDestinations.count) * rowHeightEstimate
+
+        // Define a maximum height to prevent the list from becoming excessively tall.
+        let maxHeight: CGFloat = 300 // Example max height, adjust as needed
+
+        // Return the calculated height, constrained by the max height and ensuring it's non-negative.
+        return min(max(0, listContentHeight), maxHeight)
     }
 
-    /// Function to remove items from the intermediate list
-    func removeIntermediateStop(at offsets: IndexSet) {
-        routeViewModel.intermediateDestinations.remove(atOffsets: offsets)
-        print("Removed intermediate stop at offsets: \(offsets). Count: \(routeViewModel.intermediateDestinations.count)")
-    }
 
-    /// Helper function to get sheet parameters based on the item
+    // Removed unused removeIntermediateStop function
+
+    /// Helper function to get sheet parameters based on the item being edited.
     static func sheetParameters(for item: EditableItem, origin: String, finalStop: String, intermediateDestinations: [String]) -> (text: String, title: String) {
         switch item {
         case .origin:
@@ -279,17 +330,19 @@ struct HomeView: View {
         case .finalStop:
             return (text: finalStop, title: "Set Final Destination")
         case let .intermediate(index):
-            // Safely check index
+            // Safely check index before accessing
             if intermediateDestinations.indices.contains(index) {
                 return (text: intermediateDestinations[index], title: "Edit Stop \(index + 1)")
             } else {
-                // Handle invalid index case gracefully
+                // Fallback for an invalid index (should ideally not happen)
                 print("Warning: Invalid index \(index) passed to sheet. Using defaults.")
                 return (text: "", title: "Edit Stop")
             }
         }
     }
-} // --- END: HOMEVIEW --
+} // --- END: HOMEVIEW ---
+
+// --- Helper Views and Enums (Keep these as they are) ---
 
 /// Helper View for the Button Style (extracted for clarity)
 struct DestinationButtonView: View {
@@ -307,6 +360,7 @@ struct DestinationButtonView: View {
                     .font(.headline)
                     .foregroundColor(.white)
                     .lineLimit(1) // Prevent text from wrapping
+                    .truncationMode(.tail) // Truncate if too long
 
                 Spacer()
 
@@ -314,7 +368,7 @@ struct DestinationButtonView: View {
                     .foregroundColor(.white.opacity(0.7))
             }
             .padding()
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 44) // Ensure minimum tap target size
             // Use a slightly lighter background if empty, or the solid color if filled
             .background(isEmpty ? color.opacity(0.8) : color)
             .cornerRadius(10) // Rounded corners
@@ -339,7 +393,10 @@ enum EditableItem: Identifiable, Hashable {
     }
 }
 
+// --- Preview ---
 #Preview {
+    // Ensure the preview also uses the updated ViewModel structure if needed
     HomeView()
-        .environment(RouteViewModel())
+        .environmentObject(RouteViewModel()) // Use environmentObject for preview too
 }
+

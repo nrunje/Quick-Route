@@ -3,56 +3,47 @@
 //  Quick Route
 //
 //  Created by Nicholas Runje on 4/22/25.
+//  Updated: 4/28/25
 //
 
-import CoreLocation // Required for CLLocationCoordinate2D
-import MapKit // Required for MKRoute, CLLocationCoordinate2D
+import CoreLocation
+import MapKit
 import SwiftUI
 
+/// Holds all necessary data for one leg of the journey.
+struct RouteLegData: Identifiable {
+    let id = UUID() // Conformance to Identifiable for ForEach loops
+    let route: MKRoute
+    let source: MKMapItem
+    let destination: MKMapItem
+    let addressPair: (String, String) // Original addresses for display
+}
+
 /// ViewModel responsible for managing the state and logic for route planning.
-class RouteViewModel: Observable, ObservableObject {
+class RouteViewModel: ObservableObject { // Removed redundant 'Observable' conformance
     /// Sample text to ensure RouteViewModel is available throughout environment
     @Published var sampleText: String = "Hello from RouteViewModel!"
-    
+
     /// Origin point of navigation
     @Published var origin: String = ""
-    
+
     /// List of INTERMEDIATE destination strings.
-//    @Published var intermediateDestinations: [String] = ["Seattle, WA", "Bellevue, WA"] // Start empty now
-    @Published var intermediateDestinations: [String] = [] // Start empty now
+    @Published var intermediateDestinations: [String] = []
 
     /// Final stop of navigation
     @Published var finalStop: String = ""
-    
-    /// Checking if geocoding is ongoing
+
+    /// Checking if route planning is ongoing
     @Published var isPlanningRoute: Bool = false
-    
-    /// List of all legs of journey in MKRoute objects
-    @Published var routes: [MKRoute]? = nil
-    
-    /// Tests and prints the results from sample geocoding of origin, waypoints (if any), and final stop
-    @MainActor
-    func testGeocode() async {
-        do {
-            if let originCoord = try await getCoordinateFrom(address: origin) {
-                print("Origin:", originCoord)
-            }
 
-            for addr in intermediateDestinations {
-                if let coord = try await getCoordinateFrom(address: addr) {
-                    print("Intermediate:", coord)
-                }
-            }
+    /// List of all calculated legs of the journey, including route, map items, and addresses.
+    /// This replaces the old 'routes: [MKRoute]?' property.
+    @Published var calculatedRouteLegs: [RouteLegData]? = nil
 
-            if let finalCoord = try await getCoordinateFrom(address: finalStop) {
-                print("Final stop:", finalCoord)
-            }
-        } catch {
-            print("Error geocoding address:", error)
-        }
-    }
-    
-    /// Creates a list of tuples of the string address pairs
+    // --- Address Input Management ---
+
+    /// Creates a list of tuples of the string address pairs for validation or preliminary display.
+    /// Note: The final addressPair in RouteLegData comes from the input used for geocoding that leg.
     func makeLegAddressPairs() -> [(String, String)]? {
         // 1. Ordered list of non-blank stops
         let orderedStops = ([origin] + intermediateDestinations + [finalStop])
@@ -68,121 +59,201 @@ class RouteViewModel: Observable, ObservableObject {
         }
         return legs.isEmpty ? nil : legs
     }
-    
+
+    // --- Geocoding ---
+
     /// Converts a human-readable address into geographic coordinates using Apple's geocoding service.
-    ///
-    /// - Parameter address: A full address string.
-    /// - Returns: A `CLLocationCoordinate2D` if found, or `nil` if geocoding failed.
-    /// - Throws: An error if geocoding fails due to system or network issues.
+    /// Returns nil if geocoding finds no result for the address.
+    /// Throws an error if the geocoding service fails (e.g., network issue).
     func getCoordinateFrom(address: String) async throws -> CLLocationCoordinate2D? {
+        // Trim whitespace before geocoding
+        let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedAddress.isEmpty else { return nil } // Don't geocode empty strings
+
+        // Use withCheckedThrowingContinuation for async/await wrapper around completion handler API
         return try await withCheckedThrowingContinuation { continuation in
             let geocoder = CLGeocoder()
-            geocoder.geocodeAddressString(address) { placemarks, error in
+            geocoder.geocodeAddressString(trimmedAddress) { placemarks, error in
                 if let error = error {
+                    // Geocoding service error
+                    print("Geocoding error for '\(trimmedAddress)': \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                 } else if let location = placemarks?.first?.location {
+                    // Successfully found coordinates
                     continuation.resume(returning: location.coordinate)
                 } else {
+                    // Geocoding succeeded but found no results for the address
+                    print("No coordinates found for address: '\(trimmedAddress)'")
                     continuation.resume(returning: nil)
                 }
             }
         }
     }
 
-    /// Builds an array of MKRoute objects for each segment of the multi-stop route.
+    // --- Route Calculation ---
+
+    /// Builds an array of RouteLegData objects for each segment of the multi-stop route.
+    /// Geocodes all addresses, then calculates MKDirections for each valid leg.
     ///
-    /// This function first geocodes all addresses to get their coordinates. Then, it
-    /// calculates directions for each leg of the journey: origin to the first waypoint,
-    /// each waypoint to the next, and finally the last waypoint to the final destination.
-    ///
-    /// - Returns: An array of `MKRoute` objects, one for each segment of the route,
-    ///            or `nil` if the route cannot be calculated (e.g., origin/destination
-    ///            cannot be geocoded, or no routes found for any segment).
-    /// - Throws: An error if geocoding *fails* (system/network issue) or if a route
-    ///           calculation *fails* (system/network issue with directions service).
-    func buildMKRoutes() async throws -> [MKRoute]? { // Changed return type to [MKRoute]?
-        print("Building MKRoutes")
+    /// - Returns: An array of `RouteLegData` objects, one for each segment,
+    ///            or `nil` if the route cannot be calculated (e.g., origin/final
+    ///            cannot be geocoded, fewer than 2 valid stops, or no route found
+    ///            for any required segment).
+    /// - Throws: An error if geocoding or route calculation *fails* due to a
+    ///           system/network issue.
+    @MainActor // Ensure updates to @Published properties happen on the main thread
+    func buildAndStoreRoutes() async {
+        print("Starting route building process...")
+        self.isPlanningRoute = true
+        self.calculatedRouteLegs = nil // Clear previous results
 
-        // Get coordinates for origin and final destination.
-        // getCoordinateFrom throws on *failure*, returns nil on *no result*.
-        // If origin or final cannot be geocoded (returns nil), we cannot plan the route.
-        guard let originCoord = try await getCoordinateFrom(address: origin),
-              let finalCoord = try await getCoordinateFrom(address: finalStop) else {
-            print("Could not geocode origin or final destination address. Cannot plan route.")
-            return nil // Cannot calculate route if origin or final is unknown
+        // Get the address pairs first based on current input state
+        guard let addressPairs = makeLegAddressPairs() else {
+             print("Not enough valid addresses provided to form legs.")
+             self.isPlanningRoute = false
+             // Optionally set an error message state here
+             return
         }
 
-        let originMapItem = MKMapItem(placemark: MKPlacemark(coordinate: originCoord))
-        let finalMapItem = MKMapItem(placemark: MKPlacemark(coordinate: finalCoord))
+        // --- 1. Geocode all unique addresses ---
+        // Create a set of unique addresses to avoid redundant geocoding calls
+        let uniqueAddresses = Set(addressPairs.flatMap { [$0.0, $0.1] })
+        var coordinateCache: [String: CLLocationCoordinate2D] = [:]
+        var geocodingFailed = false
 
-        // Convert intermediate addresses to MKMapItems, skipping those that return nil from geocoding
-        var intermediateMapItems: [MKMapItem] = []
-        for address in intermediateDestinations {
-            if let coord = try await getCoordinateFrom(address: address) { // getCoordinateFrom throws on failure
-                let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coord))
-                intermediateMapItems.append(mapItem)
-            } else {
-                // Geocoding returned nil for this intermediate address - skip it but continue
-                print("Could not geocode intermediate address: \(address). Skipping this stop.")
-            }
-        }
-
-        // Prepare all stops in order: origin, intermediates, final
-        var allStops: [MKMapItem] = [originMapItem]
-        allStops.append(contentsOf: intermediateMapItems)
-        allStops.append(finalMapItem)
-
-        // If after successful geocoding of origin/final, and adding valid intermediates,
-        // we still have less than 2 stops, a route is impossible.
-        if allStops.count < 2 {
-            print("Not enough valid locations (origin, final, and intermediates) to form a route.")
-            return nil // Cannot calculate route with less than 2 valid points
-        }
-
-        var routeSegments: [MKRoute] = [] // Array to hold each route segment
-        var currentSource = allStops[0] // Start with the origin
-
-        // Iterate through the stops, calculating a route for each segment
-        for i in 1 ..< allStops.count {
-            let destination = allStops[i]
-
-            let request = MKDirections.Request()
-            request.source = currentSource
-            request.destination = destination
-            request.transportType = .automobile // Or choose other transport types as needed
-            request.requestsAlternateRoutes = false // Usually you want just one route per segment
-
-            print("Calculating route from \(currentSource.placemark.coordinate.latitude), \(currentSource.placemark.coordinate.longitude) to \(destination.placemark.coordinate.latitude), \(destination.placemark.coordinate.longitude)")
-
-            let directions = MKDirections(request: request)
+        print("Geocoding addresses: \(uniqueAddresses)")
+        for address in uniqueAddresses {
             do {
-                let response = try await directions.calculate() // calculate throws on *failure*
-                if let route = response.routes.first {
-                    // Route found for this segment
-                    routeSegments.append(route)
-                    print("Successfully calculated route segment \(i).")
+                if let coord = try await getCoordinateFrom(address: address) {
+                    coordinateCache[address] = coord
+                    print("Successfully geocoded '\(address)' to \(coord)")
                 } else {
-                    // calculate succeeded, but found no routes for this segment.
-                    // This means the route *cannot be calculated* as planned.
-                    print("No route found for segment \(i). Cannot complete multi-stop route.")
-                    return nil // Return nil if *any* segment fails to find a route
+                    // Geocoding returned nil (address not found), treat as failure for route planning
+                    print("Failed to find coordinates for essential address: '\(address)'")
+                    geocodingFailed = true
+                    // You might want to provide more specific feedback to the user here
+                    // For now, we'll break and prevent route calculation
+                    break
                 }
             } catch {
-                // calculate failed due to a system/network error - throw it
-                print("Error calculating route for segment \(i): \(error.localizedDescription). Throwing error.")
-                throw error // Re-throw the error if a route calculation *fails*
+                // Geocoding threw an error (network/service issue)
+                print("Geocoding service error for '\(address)': \(error.localizedDescription)")
+                geocodingFailed = true
+                // Handle the error appropriately (e.g., show alert to user)
+                break // Stop the process if any geocoding fails critically
             }
-
-            // The destination of the current segment becomes the source for the next
-            currentSource = destination
         }
 
-        // If we successfully calculated a route for every segment in the loop,
-        // the routeSegments array will not be empty (since allStops.count >= 2).
-        // We return the array.
-        print("Finished building MKRoutes. Found \(routeSegments.count) segments.")
-        return routeSegments // Return the array of successfully calculated route segments
+        // If any essential geocoding failed, stop.
+        guard !geocodingFailed else {
+            print("Route planning stopped due to geocoding failure.")
+            self.isPlanningRoute = false
+            // Optionally set an error message state here
+            return
+        }
+        print("Geocoding complete. Cache: \(coordinateCache)")
+
+        // --- 2. Create MapItems and Calculate Routes Leg by Leg ---
+        var routeLegsDataResult: [RouteLegData] = []
+        var routeCalculationFailed = false
+
+        for (index, pair) in addressPairs.enumerated() {
+            let startAddress = pair.0
+            let endAddress = pair.1
+
+            // Retrieve coordinates from our cache (should exist if geocoding didn't fail)
+            guard let startCoord = coordinateCache[startAddress],
+                  let endCoord = coordinateCache[endAddress] else {
+                print("Error: Coordinate missing from cache for leg \(index + 1) (\(startAddress) -> \(endAddress)). This shouldn't happen.")
+                routeCalculationFailed = true
+                break // Stop if data integrity issue occurs
+            }
+
+            let sourceMapItem = MKMapItem(placemark: MKPlacemark(coordinate: startCoord))
+            sourceMapItem.name = startAddress // Assign name for potential use in Maps app
+            let destinationMapItem = MKMapItem(placemark: MKPlacemark(coordinate: endCoord))
+            destinationMapItem.name = endAddress // Assign name
+
+            // --- Calculate route for this specific leg ---
+            let request = MKDirections.Request()
+            request.source = sourceMapItem
+            request.destination = destinationMapItem
+            request.transportType = .automobile // Or make this configurable
+            request.requestsAlternateRoutes = false
+
+            print("Calculating route for leg \(index + 1): \(startAddress) -> \(endAddress)")
+            let directions = MKDirections(request: request)
+
+            do {
+                let response = try await directions.calculate() // Throws on network/service error
+                if let route = response.routes.first {
+                    // Successfully calculated route for this leg
+                    print("Successfully calculated route for leg \(index + 1).")
+                    let legData = RouteLegData(route: route,
+                                               source: sourceMapItem,
+                                               destination: destinationMapItem,
+                                               addressPair: pair) // Store original addresses
+                    routeLegsDataResult.append(legData)
+                } else {
+                    // Calculation succeeded, but Maps couldn't find a route between these points
+                    print("No route found between '\(startAddress)' and '\(endAddress)' for leg \(index + 1).")
+                    routeCalculationFailed = true
+                    // Handle this failure (e.g., inform user which leg failed)
+                    break // Stop the entire process if any leg fails
+                }
+            } catch {
+                // MKDirections calculation failed (network/service error)
+                print("Error calculating directions for leg \(index + 1): \(error.localizedDescription)")
+                routeCalculationFailed = true
+                // Handle the error (e.g., show alert)
+                break // Stop the entire process
+            }
+        } // End of loop through addressPairs
+
+        // --- 3. Update Published State ---
+        if routeCalculationFailed {
+            print("Route calculation failed for one or more legs.")
+            self.calculatedRouteLegs = nil // Ensure no partial route is stored
+            // Optionally set an error message state here
+        } else if routeLegsDataResult.isEmpty {
+             print("No route legs were successfully calculated (might be due to initial address validation).")
+             self.calculatedRouteLegs = nil
+        }
+         else {
+            print("Successfully calculated \(routeLegsDataResult.count) route legs.")
+            self.calculatedRouteLegs = routeLegsDataResult // Store the complete results
+        }
+
+        self.isPlanningRoute = false // Mark planning as finished
+        print("Route building process finished.")
+    }
+
+    // --- Test Function (Optional) ---
+    @MainActor
+    func testGeocode() async {
+        // This function can remain for basic geocoding tests if needed,
+        // but buildAndStoreRoutes now handles the full process.
+        print("--- Testing Geocoding ---")
+        let addressesToTest = ([origin] + intermediateDestinations + [finalStop])
+             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+             .filter { !$0.isEmpty }
+
+        guard !addressesToTest.isEmpty else {
+            print("No addresses to test.")
+            return
+        }
+
+        for addr in addressesToTest {
+             do {
+                 if let coord = try await getCoordinateFrom(address: addr) {
+                     print("Test Geocode Success: '\(addr)' -> \(coord)")
+                 } else {
+                     print("Test Geocode No Result: '\(addr)'")
+                 }
+             } catch {
+                 print("Test Geocode Error: '\(addr)' -> \(error.localizedDescription)")
+             }
+         }
+         print("--- Finished Testing Geocoding ---")
     }
 }
-
-
