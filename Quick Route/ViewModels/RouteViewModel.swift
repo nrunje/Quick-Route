@@ -30,6 +30,7 @@ class RouteViewModel: Observable, ObservableObject {
     /// List of all legs of journey in MKRoute objects
     @Published var routes: [MKRoute]? = nil
     
+    /// Tests and prints the results from sample geocoding of origin, waypoints (if any), and final stop
     @MainActor
     func testGeocode() async {
         do {

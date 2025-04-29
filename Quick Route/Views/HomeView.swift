@@ -11,8 +11,6 @@ struct HomeView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
     /// State to track which item is being edited via the sheet.
     @State private var editingItem: EditableItem? = nil
-    /// State to track if geocoding is ongoing
-    @State private var isPlanningRoute: Bool = false
     /// State to turn on validation alert (in case either origin or final stop is left blank)
     @State private var showValidationAlert = false
     /// State to display alert message
@@ -159,7 +157,7 @@ struct HomeView: View {
                         return                                 // ⬅️  Skip the rest of the action
                     }
                     
-                    isPlanningRoute = true
+                    routeViewModel.isPlanningRoute = true
 
                     // --- Clean intermediates first
                     routeViewModel.intermediateDestinations.removeAll {
@@ -174,17 +172,17 @@ struct HomeView: View {
                             print("Could not compute routes")
                         }
 
-                        isPlanningRoute = false
+                        routeViewModel.isPlanningRoute = false
                     }
                 } label: {
                     // ... (ProgressView or Text label based on isPlanningRoute) ...
-                    if isPlanningRoute {
+                    if routeViewModel.isPlanningRoute {
                         ProgressView().progressViewStyle(.circular).tint(.white).padding().frame(maxWidth: .infinity).background(Color.gray).foregroundColor(.white).cornerRadius(10)
                     } else {
                         Text("Go").font(.headline).padding().frame(maxWidth: .infinity).background(Color.blue).foregroundColor(.white).cornerRadius(10)
                     }
                 }
-                .disabled(isPlanningRoute)
+                .disabled(routeViewModel.isPlanningRoute)
                 // --- END: GO BUTTON ---
 
                 // --- CLEAR BUTTON ---
