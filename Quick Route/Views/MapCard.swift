@@ -39,14 +39,24 @@ struct MapCard: View {
 
                 // ---- Square map preview --------------------------------------
                 Map(position: $camera) {
+
+                    // Blue route
                     MapPolyline(route.polyline)
-                        .stroke(.blue,
-                                style: StrokeStyle(lineWidth: 4, lineJoin: .round))
+                        .stroke(.blue, style: StrokeStyle(lineWidth: 4, lineJoin: .round))
+
+                    // START marker (green)
+                    Marker("Start",
+                           coordinate: sourceMapItem.placemark.coordinate)
+                        .tint(.green)          // tint works on iOS 17+
+
+                    // END marker (red)
+                    Marker("End",
+                           coordinate: destinationMapItem.placemark.coordinate)
+                        .tint(.red)
                 }
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .onAppear {
-                    // Fit camera to this polyline with a little padding
                     let rect = route.polyline.boundingMapRect
                     camera = .rect(rect.insetBy(dx: -rect.size.width  * 0.2,
                                                 dy: -rect.size.height * 0.2))
