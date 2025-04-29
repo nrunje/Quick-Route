@@ -34,8 +34,6 @@ struct MapView: View {
                 // .padding(.top, 50)
             }
         }
-        // Optional: Add a navigation title if this view is embedded in a NavigationView
-        // .navigationTitle("Route Legs")
     }
 }
 
