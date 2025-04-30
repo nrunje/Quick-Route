@@ -227,6 +227,167 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
         self.isPlanningRoute = false // Mark planning as finished
         print("Route building process finished.")
     }
+    
+    // MARK: - 🔄  ETA-Matrix Cache
+    private struct EdgeKey: Hashable {
+        let sx: Int, sy: Int, ex: Int, ey: Int
+        init(_ s: CLLocationCoordinate2D, _ e: CLLocationCoordinate2D, precision: Double) {
+            sx = Int((s.latitude  * precision).rounded())
+            sy = Int((s.longitude * precision).rounded())
+            ex = Int((e.latitude  * precision).rounded())
+            ey = Int((e.longitude * precision).rounded())
+        }
+    }
+
+    private var etaCache: [EdgeKey: TimeInterval] = [:]
+    private let coordPrecision: Double = 1e4     // ~11 m grid
+
+    /// Returns a cached ETA if present, otherwise queries `calculateETA()` and stores it.
+    private func cachedETA(from: CLLocationCoordinate2D,
+                           to:   CLLocationCoordinate2D) async throws -> TimeInterval {
+        let key = EdgeKey(from, to, precision: coordPrecision)
+        if let cached = etaCache[key] { return cached }
+
+        let request = MKDirections.Request()
+        request.source      = .init(placemark: .init(coordinate: from))
+        request.destination = .init(placemark: .init(coordinate: to))
+        request.transportType = .automobile
+
+        let eta = try await MKDirections(request: request).calculateETA().expectedTravelTime
+        etaCache[key] = eta
+        return eta
+    }
+
+    // MARK: - 🧮  Build pair-wise time matrix (≤10 stops ≈ 90 calls)
+    private func buildTimeMatrix(coords: [CLLocationCoordinate2D]) async throws
+            -> [[TimeInterval]] {
+        let n = coords.count
+        var matrix = Array(repeating: Array(repeating: TimeInterval.infinity, count: n), count: n)
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for i in 0..<n {
+                for j in 0..<n where i != j {
+                    group.addTask {
+                        matrix[i][j] = try await self.cachedETA(from: coords[i], to: coords[j])
+                    }
+                }
+            }
+            try await group.waitForAll()
+        }
+        return matrix
+    }
+
+    // MARK: - ✨  Exact Held-Karp solver (origin = 0, final = n-1)
+    private func optimalOrder(from matrix: [[TimeInterval]]) -> [Int] {
+        let n = matrix.count
+        guard n > 2 else { return Array(0..<n) }      // 0 → 1
+
+        let m = n - 2                                 // free way-points
+        let fullMask = 1 << m
+        var dp      = Array(repeating: Array(repeating: TimeInterval.infinity, count: n), count: fullMask)
+        var parent  = Array(repeating: Array(repeating: -1,                 count: n), count: fullMask)
+
+        // base edges (origin ➜ j)
+        for j in 1..<n-1 {
+            let bit = 1 << (j-1)
+            dp[bit][j] = matrix[0][j]
+        }
+
+        for mask in 1..<fullMask {
+            for j in 1..<n-1 where mask & (1 << (j-1)) != 0 {
+                let prevMask = mask ^ (1 << (j-1))
+                if prevMask == 0 { continue }
+                for k in 1..<n-1 where prevMask & (1 << (k-1)) != 0 {
+                    let cand = dp[prevMask][k] + matrix[k][j]
+                    if cand < dp[mask][j] {
+                        dp[mask][j]  = cand
+                        parent[mask][j] = k
+                    }
+                }
+            }
+        }
+
+        // close tour (j ➜ final)
+        var bestCost = TimeInterval.infinity
+        var bestLast = -1
+        let full = fullMask - 1
+        for j in 1..<n-1 {
+            let cost = dp[full][j] + matrix[j][n-1]
+            if cost < bestCost { bestCost = cost; bestLast = j }
+        }
+
+        // reconstruct path
+        var order: [Int] = [bestLast]
+        var mask = full
+        var last = bestLast
+        while mask != 0 {
+            let prev = parent[mask][last]
+            mask ^= (1 << (last - 1))
+            if prev != -1 { order.append(prev); last = prev }
+        }
+        order.reverse()
+        return [0] + order + [n-1]
+    }
+
+    // MARK: - 🚀  Public entry: optimise then build MKRoute legs
+    @MainActor
+    func optimizeAndBuildRoutes() async {
+        isPlanningRoute     = true
+        calculatedRouteLegs = nil
+
+        // 1️⃣ gather the raw address list
+        guard let addressPairs = makeLegAddressPairs(),
+              let allAddresses  = Optional(([origin] + intermediateDestinations + [finalStop])
+                                            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                            .filter { !$0.isEmpty }),
+              allAddresses.count >= 2 else {
+            isPlanningRoute = false; return
+        }
+
+        // 2️⃣ geocode each unique address (reuse existing helper)
+        var coords: [CLLocationCoordinate2D] = []
+        for addr in allAddresses {
+            guard let c = try? await getCoordinateFrom(address: addr) else {
+                isPlanningRoute = false; return           // fail-fast on geocode miss
+            }
+            coords.append(c)
+        }
+
+        // 3️⃣ build matrix & solve
+        do {
+            let matrix = try await buildTimeMatrix(coords: coords)
+            let best   = optimalOrder(from: matrix)       // indices into coords/allAddresses
+            // 4️⃣ convert the best sequence back to addresses, then to MKRoute legs
+            var legs: [RouteLegData] = []
+
+            for i in 0..<(best.count - 1) {
+                let sIdx = best[i], eIdx = best[i + 1]
+                let sItem = MKMapItem(placemark: .init(coordinate: coords[sIdx]))
+                sItem.name = allAddresses[sIdx]
+                let eItem = MKMapItem(placemark: .init(coordinate: coords[eIdx]))
+                eItem.name = allAddresses[eIdx]
+
+                let req = MKDirections.Request()
+                req.source = sItem; req.destination = eItem; req.transportType = .automobile
+
+                let route = try await MKDirections(request: req).calculate().routes.first
+                guard let r = route else { throw URLError(.badServerResponse) }
+
+                legs.append(.init(route: r,
+                                  source: sItem,
+                                  destination: eItem,
+                                  addressPair: (allAddresses[sIdx], allAddresses[eIdx])))
+            }
+            calculatedRouteLegs = legs
+        } catch {
+            print("Optimised build failed: \(error.localizedDescription)")
+            calculatedRouteLegs = nil
+        }
+        isPlanningRoute = false
+        
+        print("Held-Karp algorithm completed")
+    }
+
 
     // --- Test Function (Optional) ---
     @MainActor

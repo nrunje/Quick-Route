@@ -187,16 +187,10 @@ struct HomeView: View {
                     // ---- 3️⃣ Call ViewModel's route building function ----
                     // ViewModel now manages the isPlanningRoute state internally
                     Task {
-                        // No need to manage local isPlanningRoute state
-                        // The ViewModel's @MainActor function will update its @Published properties
-                        await routeViewModel.buildAndStoreRoutes()
+//                        await routeViewModel.buildAndStoreRoutes() // Basic waypoint navigation
+                        await routeViewModel.optimizeAndBuildRoutes() // Held-Karp algo optimization
 
-                        // Optional: Check if routes were successfully calculated *after* the async call
-                        // You might want to add an error property to the ViewModel
-                        // to display more specific errors (geocoding failed, no route found, etc.)
                         if routeViewModel.calculatedRouteLegs == nil && !routeViewModel.isPlanningRoute {
-                             // Example: Show a generic error if planning finished but no routes exist
-                             // A more specific error message from the ViewModel would be better.
                              routeErrorMessage = "Could not calculate the route. Please check the addresses and try again."
                              showRouteErrorAlert = true
                         }
