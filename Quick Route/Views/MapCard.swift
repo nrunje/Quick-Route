@@ -15,6 +15,8 @@ struct MapCard: View {
     let sourceMapItem: MKMapItem
     let destinationMapItem: MKMapItem
     let addressPair: (String, String)
+//    let distance: CLLocationDistance
+//    let travelTime: TimeInterval
 
     @State private var camera: MapCameraPosition = .automatic
 
