@@ -19,6 +19,7 @@ struct MapCard: View {
     let travelTime: TimeInterval
 
     @State private var camera: MapCameraPosition = .automatic
+    @EnvironmentObject var appSettings: AppSettings
 
     // Convenience text for the header
     private var legTitle: String { "Leg \(index + 1)" }
@@ -76,8 +77,22 @@ struct MapCard: View {
                 // ----- Summary data
                 
                 VStack {
-                    Text("Total time is \(Int(travelTime)) seconds")
-                    Text("Total distance is \(Int(distance)) meters")
+                    if travelTime > 3600 {
+                        let hrs: Int = Int(travelTime) / 3600
+                        let mins = Int(travelTime) % 60
+                        
+                        Text("Travel time: \(hrs)hrs \(mins)mins")
+                    } else {
+                        Text("Travel time: \(Int(travelTime) / 60) minutes")
+                    }
+
+                    if appSettings.useMetricUnits {
+                        let km = (distance / 1000)
+                        Text("Distance: \(km, specifier: "%.1f") km")
+                    } else {
+                        let mi = (distance / 1000) * 0.621371       // metres → miles
+                        Text("Distance: \(mi, specifier: "%.1f") mi")
+                    }
                 }
 
                 // ---- Export button -------------------------------------------
