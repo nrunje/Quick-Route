@@ -18,11 +18,15 @@ struct MapView: View {
             if let legs = routeViewModel.calculatedRouteLegs, !legs.isEmpty {
                 // Use TabView for a paged scrolling experience, similar to MapCard style
                 ScrollView {
+                    Text("Trip Summary:")
+                    Text("Distance: \(Int(routeViewModel.totalDistance)) meters")
+                    Text("Travel time: \(Int(routeViewModel.totalTravelTime) / 60) minutes")
+
                     ForEach(legs) { leg in
                         let legIndex = legs.firstIndex(where: { $0.id == leg.id }) ?? 0
                         
                         // Calculate the index *before* creating the MapCard view
-                        MapCard(route: leg.route, index: legIndex, sourceMapItem: leg.source, destinationMapItem: leg.destination, addressPair: leg.addressPair)
+                        MapCard(route: leg.route, index: legIndex, sourceMapItem: leg.source, destinationMapItem: leg.destination, addressPair: leg.addressPair, distance: leg.distance, travelTime: leg.travelTime)
                     
                     }
                 }

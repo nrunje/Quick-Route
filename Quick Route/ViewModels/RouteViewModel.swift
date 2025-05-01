@@ -408,7 +408,7 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
             calculatedRouteLegs = nil
             totalDistance = 0
             totalTravelTime = 0
-            
+            isPlanningRoute = false
         }
         isPlanningRoute = false
         

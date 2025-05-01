@@ -15,8 +15,8 @@ struct MapCard: View {
     let sourceMapItem: MKMapItem
     let destinationMapItem: MKMapItem
     let addressPair: (String, String)
-//    let distance: CLLocationDistance
-//    let travelTime: TimeInterval
+    let distance: CLLocationDistance
+    let travelTime: TimeInterval
 
     @State private var camera: MapCameraPosition = .automatic
 
@@ -72,6 +72,13 @@ struct MapCard: View {
                     .padding(.horizontal)
 
                 Spacer(minLength: 0)
+                
+                // ----- Summary data
+                
+                VStack {
+                    Text("Total time is \(Int(travelTime)) seconds")
+                    Text("Total distance is \(Int(distance)) meters")
+                }
 
                 // ---- Export button -------------------------------------------
                 Button(action: exportToAppleMaps) {

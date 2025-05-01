@@ -102,6 +102,9 @@ struct HomeView: View {
                                 routeViewModel.intermediateDestinations.remove(atOffsets: indexSet)
                                 // Clear calculated routes if waypoints change
                                 routeViewModel.calculatedRouteLegs = nil
+                                routeViewModel.isPlanningRoute = false
+                                routeViewModel.totalDistance = 0
+                                routeViewModel.totalTravelTime = 0
                             }
                         }
                         .listStyle(.plain) // Use plain style to remove default List background/inset
