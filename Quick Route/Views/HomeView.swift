@@ -159,9 +159,19 @@ struct HomeView: View {
                  routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
                  routeViewModel.calculatedRouteLegs = nil // Clear old routes
              } label: {
-                 Text("Test fill")
+                 Text("Test short")
              }
-             .padding(.bottom, 5)
+             .padding(10)
+            
+            Button {
+                routeViewModel.origin = "Renton"
+                routeViewModel.finalStop = "Spokane"
+                routeViewModel.intermediateDestinations = ["Seattle", "Issaquah", "Leavenworth"]
+                routeViewModel.calculatedRouteLegs = nil // Clear old routes
+            } label: {
+                Text("Test long")
+            }
+            .padding(10)
             // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---

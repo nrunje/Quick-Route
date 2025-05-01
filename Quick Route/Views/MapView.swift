@@ -11,6 +11,7 @@ import SwiftUI
 
 struct MapView: View {
     @EnvironmentObject var routeViewModel: RouteViewModel
+    @EnvironmentObject var appSettings: AppSettings
 
     var body: some View {
         Group {
@@ -19,8 +20,23 @@ struct MapView: View {
                 // Use TabView for a paged scrolling experience, similar to MapCard style
                 ScrollView {
                     Text("Trip Summary:")
-                    Text("Distance: \(Int(routeViewModel.totalDistance)) meters")
-                    Text("Travel time: \(Int(routeViewModel.totalTravelTime) / 60) minutes")
+                    
+                    if appSettings.useMetricUnits {
+                        let km = (routeViewModel.totalDistance / 1000)
+                        Text("Distance: \(km, specifier: "%.1f") km")
+                    } else {
+                        let mi = (routeViewModel.totalDistance / 1000) * 0.621371       // metres → miles
+                        Text("Distance: \(mi, specifier: "%.1f") mi")
+                    }
+                    
+                    if routeViewModel.totalTravelTime > 3600 {
+                        let hrs: Int = Int(routeViewModel.totalTravelTime) / 3600
+                        let mins = Int(routeViewModel.totalTravelTime) % 60
+                        
+                        Text("Travel time: \(hrs)hrs \(mins)mins")
+                    } else {
+                        Text("Travel time: \(Int(routeViewModel.totalTravelTime) / 60) minutes")
+                    }
 
                     ForEach(legs) { leg in
                         let legIndex = legs.firstIndex(where: { $0.id == leg.id }) ?? 0

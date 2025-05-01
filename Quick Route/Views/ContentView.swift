@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var routeViewModel = RouteViewModel()
+    @StateObject private var appSettings = AppSettings()
 
     var body: some View {
         TabView {
@@ -24,10 +25,17 @@ struct ContentView: View {
                 .tabItem {
                     Label("Map", systemImage: "map")
                 }
+            
+            SettingsView()
+                .tabItem {
+                    Image(systemName: "gear")
+                    Text("Settings")
+                }
         }
         // **** Inject the ViewModel into the environment ****
         // All child views within this TabView hierarchy can now access it
         .environmentObject(routeViewModel)
+        .environmentObject(appSettings)
     }
 }
 
