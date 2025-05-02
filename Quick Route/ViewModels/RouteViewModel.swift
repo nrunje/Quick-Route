@@ -21,6 +21,43 @@ struct RouteLegData: Identifiable {
     let travelTime: TimeInterval
 }
 
+// MARK: - Thread-Safe Cache Manager
+actor ETACacheManager {
+    private var etaCache: [RouteViewModel.EdgeKey: TimeInterval] = [:]
+    // You could move coordPrecision in here too if desired
+    // private let coordPrecision: Double = 1e4
+
+    /// Returns a cached ETA if present, otherwise queries MKDirections and stores it.
+    /// This operation is now serialized by the actor.
+    func getETA(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, precision: Double) async throws -> TimeInterval {
+        let key = RouteViewModel.EdgeKey(from, to, precision: precision)
+
+        // Check cache (read access is safe concurrently, but mutation needs serialization)
+        if let cached = etaCache[key] {
+            return cached
+        }
+
+        // Calculate ETA if not cached
+        let request = MKDirections.Request()
+        request.source = .init(placemark: .init(coordinate: from))
+        request.destination = .init(placemark: .init(coordinate: to))
+        request.transportType = .automobile // Consider making this configurable if needed
+
+        // Use calculateETA for potentially faster results (only provides time)
+        // If you needed the full route object here for distance as well, you'd use calculate()
+        let etaResponse = try await MKDirections(request: request).calculateETA()
+        let eta = etaResponse.expectedTravelTime
+
+        // Store in cache (write access is now safely serialized by the actor)
+        etaCache[key] = eta
+        return eta
+    }
+
+    func clearCache() {
+        etaCache.removeAll()
+    }
+}
+
 /// ViewModel responsible for managing the state and logic for route planning.
 class RouteViewModel: ObservableObject { // Removed redundant 'Observable' conformance
     /// Sample text to ensure RouteViewModel is available throughout environment
@@ -249,7 +286,7 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
 
     // MARK: - 🔄  ETA-Matrix Cache
 
-    private struct EdgeKey: Hashable {
+    struct EdgeKey: Hashable {
         let sx: Int, sy: Int, ex: Int, ey: Int
         init(_ s: CLLocationCoordinate2D, _ e: CLLocationCoordinate2D, precision: Double) {
             sx = Int((s.latitude * precision).rounded())
@@ -259,41 +296,54 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
         }
     }
 
-    private var etaCache: [EdgeKey: TimeInterval] = [:]
     private let coordPrecision: Double = 1e4 // ~11 m grid
+    
+    // Instantiate the actor to manage the cache
+    private let etaCacheManager = ETACacheManager()
 
-    /// Returns a cached ETA if present, otherwise queries `calculateETA()` and stores it.
-    private func cachedETA(from: CLLocationCoordinate2D,
-                           to: CLLocationCoordinate2D) async throws -> TimeInterval {
-        let key = EdgeKey(from, to, precision: coordPrecision)
-        if let cached = etaCache[key] { return cached }
-
-        let request = MKDirections.Request()
-        request.source = .init(placemark: .init(coordinate: from))
-        request.destination = .init(placemark: .init(coordinate: to))
-        request.transportType = .automobile
-
-        let eta = try await MKDirections(request: request).calculateETA().expectedTravelTime
-        etaCache[key] = eta
-        return eta
-    }
 
     // MARK: - 🧮  Build pair-wise time matrix (≤10 stops ≈ 90 calls)
 
     private func buildTimeMatrix(coords: [CLLocationCoordinate2D]) async throws
         -> [[TimeInterval]] {
         let n = coords.count
-        var matrix = Array(repeating: Array(repeating: TimeInterval.infinity, count: n), count: n)
+        // Use a temporary dictionary for thread-safe writes during matrix building
+        var concurrentMatrix = [EdgeKey: TimeInterval]()
 
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            for i in 0 ..< n {
-                for j in 0 ..< n where i != j {
-                    group.addTask {
-                        matrix[i][j] = try await self.cachedETA(from: coords[i], to: coords[j])
-                    }
-                }
+        try await withThrowingTaskGroup(of: (EdgeKey, TimeInterval).self) { group in
+             for i in 0 ..< n {
+                 for j in 0 ..< n where i != j {
+                     group.addTask {
+                         // Call the actor's method for safe caching & retrieval
+                         let eta = try await self.etaCacheManager.getETA(
+                             from: coords[i],
+                             to: coords[j],
+                             precision: self.coordPrecision
+                         )
+                         // Return the key and eta to be collected safely
+                         return (EdgeKey(coords[i], coords[j], precision: self.coordPrecision), eta)
+                     }
+                 }
+             }
+            // Collect results safely *after* tasks complete
+             for try await (key, eta) in group {
+                 concurrentMatrix[key] = eta
+             }
+         }
+
+        // Now, construct the final 2D array from the dictionary
+        var matrix = Array(repeating: Array(repeating: TimeInterval.infinity, count: n), count: n)
+        for i in 0 ..< n {
+            for j in 0 ..< n where i != j {
+                 let key = EdgeKey(coords[i], coords[j], precision: coordPrecision)
+                 if let eta = concurrentMatrix[key] {
+                    matrix[i][j] = eta
+                 } else {
+                    // This shouldn't happen if all tasks succeeded, but handle defensively
+                    print("Warning: Missing ETA in matrix construction for \(i) -> \(j)")
+                    throw URLError(.cannotLoadFromNetwork) // Or a more specific error
+                 }
             }
-            try await group.waitForAll()
         }
         return matrix
     }
@@ -351,74 +401,181 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
         return [0] + order + [n - 1]
     }
 
-    // MARK: - 🚀  Public entry: optimise then build MKRoute legs
-
+    // MARK: - 🚀 Public entry: optimise then build MKRoute legs
+    // (Modified to clear cache and handle errors slightly differently)
     @MainActor
     func optimizeAndBuildRoutes() async {
         isPlanningRoute = true
         calculatedRouteLegs = nil
+        totalDistance = 0
+        totalTravelTime = 0
+        // Clear the ETA cache for potentially new traffic conditions on a new run
+        await etaCacheManager.clearCache()
 
         // 1️⃣ gather the raw address list
-        guard let addressPairs = makeLegAddressPairs(),
-              let allAddresses = Optional(([origin] + intermediateDestinations + [finalStop])
-                  .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                  .filter { !$0.isEmpty }),
-              allAddresses.count >= 2 else {
+        let allAddressesInput = ([origin] + intermediateDestinations + [finalStop])
+             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+             .filter { !$0.isEmpty }
+
+        guard allAddressesInput.count >= 2 else {
+            print("Need at least an origin and a final destination.")
+            // Optionally set an error state for the UI
             isPlanningRoute = false; return
         }
 
-        // 2️⃣ geocode each unique address (reuse existing helper)
+        // 2️⃣ geocode each unique address
         var coords: [CLLocationCoordinate2D] = []
-        for addr in allAddresses {
-            guard let c = try? await getCoordinateFrom(address: addr) else {
-                isPlanningRoute = false; return // fail-fast on geocode miss
+        var geocodingFailed = false
+        var addressOrderForCoords = [String]() // Keep track of addresses corresponding to coords indices
+
+        // Use a Set to geocode each unique address only once
+        let uniqueAddresses = Set(allAddressesInput)
+        var geocodedCoords: [String: CLLocationCoordinate2D] = [:]
+
+        print("Geocoding \(uniqueAddresses.count) unique addresses...")
+        for addr in uniqueAddresses {
+            do {
+                guard let c = try await getCoordinateFrom(address: addr) else {
+                    print("❌ Failed to geocode address: '\(addr)'. Cannot plan route.")
+                    // Optionally set an error state for the UI indicating which address failed
+                    geocodingFailed = true
+                    break // Stop geocoding if one fails
+                }
+                geocodedCoords[addr] = c
+                print("  ✅ Geocoded '\(addr)'")
+            } catch {
+                 print("❌ Geocoding service error for '\(addr)': \(error.localizedDescription). Cannot plan route.")
+                 // Optionally set an error state for the UI
+                 geocodingFailed = true
+                 break // Stop geocoding on service error
             }
-            coords.append(c)
         }
+
+        guard !geocodingFailed else {
+            isPlanningRoute = false; return
+        }
+
+        // Reconstruct coords and addressOrderForCoords based on the original input order
+        // Ensure origin is first, final is last. Intermediate order doesn't matter *yet*.
+        guard let originCoord = geocodedCoords[origin],
+              let finalCoord = geocodedCoords[finalStop] else {
+            print("Error: Could not find geocoded coordinate for Origin or Final Stop after successful geocoding. This indicates a logic error.")
+            isPlanningRoute = false; return
+        }
+
+        coords.append(originCoord) // Index 0
+        addressOrderForCoords.append(origin)
+
+        intermediateDestinations.forEach { addr in
+             if let coord = geocodedCoords[addr] {
+                 coords.append(coord)
+                 addressOrderForCoords.append(addr)
+             } // If an intermediate failed geocoding, it was caught earlier
+        }
+
+        coords.append(finalCoord) // Index n-1
+        addressOrderForCoords.append(finalStop)
+
+        guard coords.count == allAddressesInput.count else {
+             print("Error: Mismatch between input addresses and geocoded coordinates count.")
+             isPlanningRoute = false; return
+        }
+
+        print("Coordinates ready for matrix building: \(coords.count)")
 
         // 3️⃣ build matrix & solve
         do {
+            print("Building ETA matrix...")
             let matrix = try await buildTimeMatrix(coords: coords)
-            let best = optimalOrder(from: matrix) // indices into coords/allAddresses
+            print("ETA matrix built. Solving TSP...")
+            let best = optimalOrder(from: matrix) // indices into coords/addressOrderForCoords
+            print("Optimal order indices: \(best)")
+
             // 4️⃣ convert the best sequence back to addresses, then to MKRoute legs
             var legs: [RouteLegData] = []
+            var routeCalculationFailed = false
 
+            print("Calculating final MKRoute legs for optimal order...")
             for i in 0 ..< (best.count - 1) {
-                let sIdx = best[i], eIdx = best[i + 1]
-                let sItem = MKMapItem(placemark: .init(coordinate: coords[sIdx]))
-                sItem.name = allAddresses[sIdx]
-                let eItem = MKMapItem(placemark: .init(coordinate: coords[eIdx]))
-                eItem.name = allAddresses[eIdx]
+                let sIdx = best[i]
+                let eIdx = best[i + 1]
+
+                // Validate indices before accessing arrays
+                 guard sIdx >= 0, sIdx < coords.count, eIdx >= 0, eIdx < coords.count else {
+                     print("Error: Optimal order produced invalid index. sIdx=\(sIdx), eIdx=\(eIdx), count=\(coords.count)")
+                     routeCalculationFailed = true
+                     break
+                 }
+
+
+                let startCoord = coords[sIdx]
+                let endCoord = coords[eIdx]
+                let startAddress = addressOrderForCoords[sIdx]
+                let endAddress = addressOrderForCoords[eIdx]
+
+                print("  Calculating leg \(i+1): '\(startAddress)' -> '\(endAddress)'")
+
+                let sItem = MKMapItem(placemark: .init(coordinate: startCoord))
+                sItem.name = startAddress
+                let eItem = MKMapItem(placemark: .init(coordinate: endCoord))
+                eItem.name = endAddress
 
                 let req = MKDirections.Request()
                 req.source = sItem; req.destination = eItem; req.transportType = .automobile
+                req.requestsAlternateRoutes = false // Get only the primary route
 
-                let route = try await MKDirections(request: req).calculate().routes.first
-                guard let r = route else { throw URLError(.badServerResponse) }
+                do {
+                    let response = try await MKDirections(request: req).calculate() // Use calculate() to get full route info
+                    if let r = response.routes.first {
+                         legs.append(.init(route: r,
+                                           source: sItem,
+                                           destination: eItem,
+                                           addressPair: (startAddress, endAddress),
+                                           distance: r.distance,
+                                           travelTime: r.expectedTravelTime
+                                      ))
+                        print("    ✅ Leg \(i+1) route calculated.")
+                    } else {
+                         print("❌ No MKRoute found for leg \(i+1): '\(startAddress)' -> '\(endAddress)'.")
+                         routeCalculationFailed = true
+                         // Optionally set a more specific error state
+                         break // Stop calculating legs if one fails
+                    }
+                } catch {
+                    print("❌ Error calculating MKDirections for leg \(i+1) ('\(startAddress)' -> '\(endAddress)'): \(error.localizedDescription)")
+                    routeCalculationFailed = true
+                    // Optionally set a more specific error state
+                    break // Stop calculating legs on error
+                }
+            } // end loop through legs
 
-                legs.append(.init(route: r,
-                                  source: sItem,
-                                  destination: eItem,
-                                  addressPair: (allAddresses[sIdx], allAddresses[eIdx]),
-                                  distance: r.distance,
-                                  travelTime: r.expectedTravelTime
-                    ))
+            // Final state update
+            if routeCalculationFailed {
+                 print("Route planning failed during final leg calculation.")
+                 calculatedRouteLegs = nil
+                 totalDistance = 0
+                 totalTravelTime = 0
+                 // Optionally set error state
+            } else {
+                calculatedRouteLegs = legs
+                totalDistance = calculatedRouteLegs?.reduce(0) { $0 + $1.distance } ?? 0
+                totalTravelTime = calculatedRouteLegs?.reduce(0) { $0 + $1.travelTime } ?? 0
+                 print("✅ Optimised route built successfully!")
+                 print("  Total Legs: \(calculatedRouteLegs?.count ?? 0)")
+                 print("  Total Distance: \(totalDistance) meters")
+                 print("  Total Travel Time: \(totalTravelTime) seconds")
             }
-            calculatedRouteLegs = legs
-            totalDistance = calculatedRouteLegs?.reduce(0) { $0 + $1.distance } ?? 0
-            totalTravelTime = calculatedRouteLegs?.reduce(0) { $0 + $1.travelTime } ?? 0
+
         } catch {
-            print("Optimised build failed: \(error.localizedDescription)")
+            print("❌ Optimised route building failed: \(error.localizedDescription)")
             calculatedRouteLegs = nil
             totalDistance = 0
             totalTravelTime = 0
-            isPlanningRoute = false
+            // Optionally set error state
         }
-        isPlanningRoute = false
 
-        print("Held-Karp algorithm completed")
-        print("Total distance: \(totalDistance) meters")
-        print("Total travel time: \(totalTravelTime) seconds")
+        isPlanningRoute = false
+        print("--- Route planning process finished ---")
     }
 
     // --- Test Function (Optional) ---
