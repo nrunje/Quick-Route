@@ -163,6 +163,7 @@ struct HomeView: View {
              }
              .padding(10)
             
+            /*
             Button {
                 routeViewModel.origin = "Renton"
                 routeViewModel.finalStop = "Spokane"
@@ -172,6 +173,7 @@ struct HomeView: View {
                 Text("Test long")
             }
             .padding(10)
+             */
             // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---
