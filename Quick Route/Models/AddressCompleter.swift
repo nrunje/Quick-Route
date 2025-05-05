@@ -28,7 +28,7 @@ class AddressCompleter: NSObject, ObservableObject, MKLocalSearchCompleterDelega
         completer = MKLocalSearchCompleter()
         super.init() // Call NSObject's init
         completer.delegate = self
-        completer.resultTypes = .address // Specify we only want address results
+        completer.resultTypes = [.address, .pointOfInterest] // Specify we only want address results
 
         // Optional: Bias search results to the user's region (e.g., Renton, WA)
         // You would typically get the user's current location via CLLocationManager
