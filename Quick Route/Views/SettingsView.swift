@@ -15,11 +15,22 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                // ----- Units selection -----
                 Section(header: Text("Units")) {
                     Toggle(
                         "Use Metric Units",
                         isOn: $appSettings.useMetricUnits      // 👈 bound directly
                     )
+                }
+                
+                // NEW: Transport mode picker
+                Section(header: Text("Routing Mode")) {
+                    Picker("Mode", selection: $appSettings.transportMode) {
+                        ForEach(TransportMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)   // feels like Apple Maps
                 }
                 
                 // -------- App info --------------

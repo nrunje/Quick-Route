@@ -9,6 +9,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import Combine
 
 /// Holds all necessary data for one leg of the journey.
 struct RouteLegData: Identifiable {
@@ -29,7 +30,7 @@ actor ETACacheManager {
 
     /// Returns a cached ETA if present, otherwise queries MKDirections and stores it.
     /// This operation is now serialized by the actor.
-    func getETA(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, precision: Double) async throws -> TimeInterval {
+    func getETA(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, precision: Double, transportType: MKDirectionsTransportType) async throws -> TimeInterval {
         let key = RouteViewModel.EdgeKey(from, to, precision: precision)
 
         // Check cache (read access is safe concurrently, but mutation needs serialization)
@@ -41,7 +42,7 @@ actor ETACacheManager {
         let request = MKDirections.Request()
         request.source = .init(placemark: .init(coordinate: from))
         request.destination = .init(placemark: .init(coordinate: to))
-        request.transportType = .automobile // Consider making this configurable if needed
+        request.transportType = transportType // Consider making this configurable if needed
 
         // Use calculateETA for potentially faster results (only provides time)
         // If you needed the full route object here for distance as well, you'd use calculate()
@@ -59,7 +60,25 @@ actor ETACacheManager {
 }
 
 /// ViewModel responsible for managing the state and logic for route planning.
-class RouteViewModel: ObservableObject { // Removed redundant 'Observable' conformance
+final class RouteViewModel: ObservableObject { // Removed redundant 'Observable' conformance
+    
+    // keep a reference
+    private let settings: AppSettings
+    private var cancellables = Set<AnyCancellable>()
+    
+    // MARK: ‑ init
+    init(appSettings: AppSettings) {
+        self.settings = appSettings
+
+        // Example: whenever the user flips “Automobile / Walking”,
+        // clear the ETA cache so new requests use the right mode.
+        settings.$transportMode
+            .sink { [weak self] _ in
+                Task { await self?.etaCacheManager.clearCache() }
+            }
+            .store(in: &cancellables)
+    }
+    
     /// Sample text to ensure RouteViewModel is available throughout environment
     @Published var sampleText: String = "Hello from RouteViewModel!"
 
@@ -318,7 +337,8 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
                          let eta = try await self.etaCacheManager.getETA(
                              from: coords[i],
                              to: coords[j],
-                             precision: self.coordPrecision
+                             precision: self.coordPrecision,
+                             transportType: self.settings.transportMode.mkTransportType
                          )
                          // Return the key and eta to be collected safely
                          return (EdgeKey(coords[i], coords[j], precision: self.coordPrecision), eta)
@@ -521,7 +541,7 @@ class RouteViewModel: ObservableObject { // Removed redundant 'Observable' confo
                 eItem.name = endAddress
 
                 let req = MKDirections.Request()
-                req.source = sItem; req.destination = eItem; req.transportType = .automobile
+                req.source = sItem; req.destination = eItem; req.transportType = self.settings.transportMode.mkTransportType
                 req.requestsAlternateRoutes = false // Get only the primary route
 
                 do {

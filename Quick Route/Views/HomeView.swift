@@ -428,7 +428,10 @@ enum EditableItem: Identifiable, Hashable {
 
 // --- Preview ---
 #Preview {
-    // Ensure the preview also uses the updated ViewModel structure if needed
+    let settings = AppSettings()
+    let model    = RouteViewModel(appSettings: settings)
+
     HomeView()
-        .environmentObject(RouteViewModel()) // Use environmentObject for preview too
+        .environmentObject(settings)
+        .environmentObject(model)
 }
