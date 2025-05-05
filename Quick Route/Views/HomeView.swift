@@ -17,11 +17,10 @@ struct HomeView: View {
     /// State to turn on validation alert (in case either origin or final stop is left blank)
     @State private var showValidationAlert = false
     /// State to display alert message
-    @State private var validationMessage  = ""
+    @State private var validationMessage = ""
     /// State to potentially show errors from route calculation
     @State private var showRouteErrorAlert = false
     @State private var routeErrorMessage = ""
-
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,7 +71,7 @@ struct HomeView: View {
                     // --- WAYPOINTS ---
                     if !routeViewModel.intermediateDestinations.isEmpty {
                         // Section header
-                        Text("Add Stops:")
+                        Text("Enter up to 5 stops in any order:")
                             .font(.headline)
                             .padding(.horizontal)
                             .padding(.bottom, 5) // Added padding back
@@ -95,7 +94,7 @@ struct HomeView: View {
                                     // Apply list row styling if needed, e.g., remove separators
                                     .listRowInsets(EdgeInsets()) // Remove default padding
                                     .listRowSeparator(.hidden) // Hide separators
-                                    .padding(.bottom, 8) // Add space between buttons in the list
+                                    .padding(.bottom, 16) // Add space between buttons in the list
                                 }
                             }
                             .onDelete { indexSet in
@@ -110,12 +109,35 @@ struct HomeView: View {
                         .listStyle(.plain) // Use plain style to remove default List background/inset
                         .frame(height: calculateListHeight()) // Calculate height dynamically
                         // Add horizontal padding to match other elements if List adds its own
-                         .padding(.horizontal)
-
+                        .padding(.horizontal)
                     }
                     // --- END: WAYPOINTS ---
 
                     // --- ADD WAYPOINT BUTTON ---
+                    if routeViewModel.intermediateDestinations.count < 5 {
+                        Button {
+                            routeViewModel.intermediateDestinations.append("")
+                            // Clear calculated routes if waypoints change
+                            routeViewModel.calculatedRouteLegs = nil
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add Intermediate Stop")
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.secondary.opacity(0.2))
+                            .foregroundColor(.blue)
+                            .cornerRadius(10)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 10)
+                    }
+                    
+                    
+                    /*
+                    // THIS SECTION AFTER >5 stops achieved
+                     
                     Button {
                         routeViewModel.intermediateDestinations.append("")
                         // Clear calculated routes if waypoints change
@@ -133,6 +155,7 @@ struct HomeView: View {
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 10)
+                    */
                     // --- END: ADD WAYPOINT BUTTON ---
 
                     // --- FINAL STOP BUTTON ---
@@ -153,27 +176,30 @@ struct HomeView: View {
             .ignoresSafeArea(edges: .top)
 
             // BUTTON FOR QUICK FILL (DELETE LATER)
-             Button {
-                 routeViewModel.origin = "123 Queen Anne Ave N, Seattle, WA, United States"
-                 routeViewModel.finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
-                 routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
-                 routeViewModel.calculatedRouteLegs = nil // Clear old routes
-             } label: {
-                 Text("Test short")
-             }
-             .padding(10)
-            
-            /*
-            Button {
-                routeViewModel.origin = "Renton"
-                routeViewModel.finalStop = "Spokane"
-                routeViewModel.intermediateDestinations = ["Seattle", "Issaquah", "Leavenworth"]
-                routeViewModel.calculatedRouteLegs = nil // Clear old routes
-            } label: {
-                Text("Test long")
+            HStack {
+                Button {
+                    routeViewModel.origin = "123 Queen Anne Ave N, Seattle, WA, United States"
+                    routeViewModel.finalStop = "456 Southcenter Mall, Tukwila, WA, United States"
+                    routeViewModel.intermediateDestinations = ["701 5th Ave, Seattle, WA, United States", "400 Broad St, Seattle, WA, United States"]
+                    routeViewModel.calculatedRouteLegs = nil // Clear old routes
+                } label: {
+                    Text("Test short")
+                }
+                .padding(10)
+
+                Spacer()
+
+                Button {
+                    routeViewModel.origin = "Renton"
+                    routeViewModel.finalStop = "Miami"
+                    routeViewModel.intermediateDestinations = ["San Diego", "Denver", "Dallas", "Chicago", "Ithaca, NY", "New York, NY", "Nashville"]
+                    routeViewModel.calculatedRouteLegs = nil // Clear old routes
+                } label: {
+                    Text("Test long")
+                }
+                .padding(10)
             }
-            .padding(10)
-             */
+
             // THIS NEEDS TO BE DELETED
 
             // --- BOTTOM BUTTONS ---
@@ -182,14 +208,14 @@ struct HomeView: View {
                 Button {
                     // ---- 1️⃣ Validate ----
                     let trimmedOrigin = routeViewModel.origin.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let trimmedFinal  = routeViewModel.finalStop.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let trimmedFinal = routeViewModel.finalStop.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     guard !trimmedOrigin.isEmpty, !trimmedFinal.isEmpty else {
                         validationMessage = trimmedOrigin.isEmpty && trimmedFinal.isEmpty
                             ? "Please enter both an origin and a final destination."
                             : trimmedOrigin.isEmpty
-                                ? "Please enter an origin point."
-                                : "Please enter a final destination."
+                            ? "Please enter an origin point."
+                            : "Please enter a final destination."
                         showValidationAlert = true
                         return // Skip the rest
                     }
@@ -206,8 +232,8 @@ struct HomeView: View {
                         await routeViewModel.optimizeAndBuildRoutes() // Held-Karp algo optimization
 
                         if routeViewModel.calculatedRouteLegs == nil && !routeViewModel.isPlanningRoute {
-                             routeErrorMessage = "Could not calculate the route. Please check the addresses and try again."
-                             showRouteErrorAlert = true
+                            routeErrorMessage = "Could not calculate the route. Please check the addresses and try again."
+                            showRouteErrorAlert = true
                         }
                     }
                 } label: {
@@ -255,9 +281,8 @@ struct HomeView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                 }
-                 // Optionally disable clear button while planning?
-                 // .disabled(routeViewModel.isPlanningRoute)
-
+                // Optionally disable clear button while planning?
+                // .disabled(routeViewModel.isPlanningRoute)
             } // END: HSTACK (Bottom Buttons)
             .padding(.horizontal) // Padding for the HStack
             .padding(.vertical, 10) // Padding above/below buttons
@@ -327,7 +352,6 @@ struct HomeView: View {
         // Return the calculated height, constrained by the max height and ensuring it's non-negative.
         return min(max(0, listContentHeight), maxHeight)
     }
-
 
     // Removed unused removeIntermediateStop function
 
@@ -408,4 +432,3 @@ enum EditableItem: Identifiable, Hashable {
     HomeView()
         .environmentObject(RouteViewModel()) // Use environmentObject for preview too
 }
-
