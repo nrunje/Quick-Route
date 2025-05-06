@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct Quick_RouteApp: App {
     
+    @StateObject private var launchMgr = LaunchManager()
     @StateObject private var appSettings: AppSettings
     @StateObject private var routeVM: RouteViewModel
 
@@ -25,6 +26,16 @@ struct Quick_RouteApp: App {
             ContentView()
                 .environmentObject(appSettings)   // 👈 add these two lines
                 .environmentObject(routeVM)
+                .fullScreenCover(isPresented: .constant(launchMgr.needsWelcome)) {
+                    WelcomePager {
+                        launchMgr.markCompleted()     // dismiss when done
+                    }
+                }
+//                .sheet(isPresented: .constant(launchMgr.needsWhatsNew)) {
+//                    WhatsNewView {
+//                        launchMgr.markCompleted()
+//                    }
+//                }
         }
     }
 }
