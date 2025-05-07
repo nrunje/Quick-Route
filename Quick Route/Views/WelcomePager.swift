@@ -11,8 +11,8 @@ struct WelcomePager: View {
     let done: () -> Void
     @State private var page = 0
     private let pages = [
-        ("map.fill",  "Solve multi‑stop routes"),
-        ("bolt.fill", "Optimised in seconds"),
+        ("map.fill",  "Welcome to Quick Route"),
+        ("bolt.fill", "Find the quickest way to your destination, all in seconds"),
         ("gearshape", "Tap Go and drive")
     ]
 
@@ -29,6 +29,7 @@ struct WelcomePager: View {
                     }
                     .tag(i)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
                 }
             }
             .tabViewStyle(.page)
@@ -45,6 +46,8 @@ struct WelcomePager: View {
     }
 }
 
-//#Preview {
-//    WelcomePager(done: () -> Void)
-//}
+#Preview {
+    WelcomePager {
+        
+    }
+}
